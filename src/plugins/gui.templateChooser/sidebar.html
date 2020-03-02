@@ -1,5 +1,32 @@
 <script id="gui-tplchooser-sidebar" type="text/x-template">
-    will show<br/>
-    sidebar options<br/>
-    here
+	{^{tabs _collapsible=true}}
+	<ul >
+		<li><a href="#tab_new">Nuevo</a></li>
+		<li><a href="#tab_edit">Editar</a></li>
+	</ul>
+	<div id="tab_new">
+		<label></label> 
+		<input type="text" id="palabraClave" class="ui-widget ui-widget-content ui-corner-all" placeholder="Palabra clave" required/> <br>
+
+		<div class="categorias" >
+
+			<label>Categoría</label>
+			<br>
+			<input type="checkbox"/>  <label>Cat 1</label>
+			<br>
+			<br>
+			<input type="checkbox"/>  <label>Cat 2</label>
+			<br>
+			<br>
+			<input type="checkbox"/> <label>Cat 3</label>
+			<br/>
+
+		</div>
+
+		<button class="ui-button ui-corner-all btn_filtro" id="filtro">Filtrar</button>
+	</div>
+	<div id="tab_edit">
+		//Editar y busqueda
+	</div>
+	{{/tabs}}
 </script>

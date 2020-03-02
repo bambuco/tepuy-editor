@@ -1,24 +1,126 @@
 <!DOCTYPE html>
 <html>
-  <head>
-    <link rel="stylesheet" type="text/css" href="vendor.min.css" />
-    <link rel="stylesheet" type="text/css" href="tepuy-editor.css" />
-  </head>
-  <body>
-    <div id="tepuy-editor"></div>
-    <script src="vendor.min.js"></script>
-    <script src="tepuy-editor.js"></script>
-    <!-- inject:js:disabled -->
-    <!--endinject-->
-    <!-- inject:template:html -->
-    <!--endinject-->
-    <script>
-      var api = {
+<head>
+  <link rel="stylesheet" type="text/css" href="vendor.min.css" />
+  <link rel="stylesheet" type="text/css" href="tepuy-editor.css" />
+</head>
+<body>
+  <div id="tepuy-editor"></div>
+  <script src="vendor.min.js"></script>
+  <script src="tepuy-editor.js"></script>
 
-      };
-      tepuyEditor.App.init({
-        api: api
+  <!-- inject:js:disabled -->
+  <!--endinject-->
+  <!-- inject:template:html -->
+  <!--endinject-->
+  <script>
+    var api = {
+
+    };
+    tepuyEditor.App.init({
+      api: api
+    });
+
+    var template = [
+    {
+      id:'1',
+      imagen:'https://picsum.photos/400/100',
+      description:"Lorem ipsum1",
+      createdBy:'12/02/2020',
+      category:'Cat1',
+      license:'GPL'
+    },
+    {
+      id:'2',
+      imagen:'https://picsum.photos/400/100',
+      description:"Lorem ipsum2",
+      createdBy:'12/02/2020',
+      category:'Cat2',
+      license:'GPL'
+    },
+    {
+      id:'4',
+      imagen:'https://picsum.photos/400/100',
+      description:"Lorem ipsum3",
+      createdBy:'13/08/2019',
+      category:'Cat3',
+      license:'GPL'
+    },
+    {
+      id:'5',
+      imagen:'https://picsum.photos/400/100',
+      description:"Lorem ipsum4",
+      createdBy:'15/12/2007',
+      category:'Cat3',
+      license:'GPL'
+    },
+
+    ];
+
+    $.each(template,function (index) {
+     $("#resultados").append('<div class="template-result" id="'+template[index].id+'"> <img src="'+template[index].imagen+'" /> <br/> <h3> Plantilla Nº '+template[index].id+' <h3> <em>'+template[index].description+' </em> <br/> <p class="date_mod" > &uacute;ltima edici&oacute;n <br/> '+template[index].createdBy+' </p> <br/> </div>');   
+     $('#'+template[index].id).click(function () {
+                $('#nombrePlantilla').text(template[index].description);
+        $('#imagenFinal').attr('src',template[index].imagen);
+
+        $( "#detallePlantilla" ).dialog({
+          modal: true,
+          width:'50%',
+          buttons: {
+            Ok: function() {
+              $( this ).dialog( "close" );
+            }
+          }
+        })
+    });      
+   });
+
+    $('#filtro').click(function() {
+
+      /*$.ajax({
+      url: 'data.json',
+      data:{palabra_clave:$('#palabraClave').val()}
+      type: 'GET',
+      success: function(respuesta) {
+            $.each(respuesta,function(index){
+                  $("#resultados").append('<div class="template-result"> <br/> <h3> '+respuesta[index].description+' </h3> <br/> <p class="date_mod" > &uacute;ltima edici&oacute;n <br/> '+respuesta[index].createdBy+' </p> <br/> </div>');    
+            });
+      },
+      error: function() {
+        alert("No es posible completar la operación");
+      }
+    });*/
+    
+
+    const result = template.find(codigo=>codigo.id === $('#palabraClave').val());
+    //console.log(result);
+
+    $("#resultados").empty();
+
+    if (result!=null) {
+      $("#resultados").append('<div class="template-result" id="'+result.id+'"> <img src="'+result.imagen+'" />  <br/> <h3> Plantilla Nº '+result.id+' <h3> <em>'+result.description+' </em> <br/> <p class="date_mod" > &uacute;ltima edici&oacute;n <br/> '+result.createdBy+' </p> <br/> </div>'); 
+
+      $('#'+result.id).click(function () {
+
+        $('#nombrePlantilla').text(result.description);
+        $('#imagenFinal').attr('src',result.imagen);
+
+        $( "#detallePlantilla" ).dialog({
+          modal: true,
+          width:'50%',
+          buttons: {
+            Ok: function() {
+              $( this ).dialog( "close" );
+            }
+          }
+        });
       });
-    </script>
-  </body>
+
+    }else{
+      alert('No se encontraron resultados');  
+      location.reload();
+    }
+  });    
+</script>
+</body>
 </html>
