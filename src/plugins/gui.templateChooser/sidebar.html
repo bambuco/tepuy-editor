@@ -1,29 +1,23 @@
 <script id="gui-tplchooser-sidebar" type="text/x-template">
-	{^{tabs _collapsible=true}}
-	<ul >
-		<li><a href="#tab_new">Nuevo</a></li>
-		<li><a href="#tab_edit">Editar</a></li>
+{^{tabs}}
+	<ul id="tabs" >
+		<li><a href="#tab_new" data-i18n="sidebar.new" ></a></li>
+		<li><a href="#tab_edit" data-i18n="sidebar.edit"></a></li>
 	</ul>
 	<div id="tab_new">
-		<label></label> 
-		<input type="text" id="palabraClave" class="ui-widget ui-widget-content ui-corner-all" placeholder="Palabra clave" required/> <br>
+		<label data-i18n="label.keyword" ></label> 
+		<input type="text" id="keyword" required/> <br>
 
-		<div class="categorias" >
-
-			<label>Categoría</label>
-			<br>
-			<input type="checkbox"/>  <label>Cat 1</label>
-			<br>
-			<br>
-			<input type="checkbox"/>  <label>Cat 2</label>
-			<br>
-			<br>
-			<input type="checkbox"/> <label>Cat 3</label>
-			<br/>
-
+		<div id="categories" >
+			<h4 data-i18n="label.categories" ></h4>
+			 <br>
+			{{for categories}}
+				<input type="checkbox" id="{{:}}" name="checks[]" value="{{:}}">
+				<label for="{{:}}"> {{:}}</label><br>
+			{{/for}}
 		</div>
 
-		<button class="ui-button ui-corner-all btn_filtro" id="filtro">Filtrar</button>
+		<button class="ui-button ui-corner-all btn_filter" id="filter" data-i18n="button.filter" data-link="{on ~onFilter}" ></button>
 	</div>
 	<div id="tab_edit">
 		//Editar y busqueda

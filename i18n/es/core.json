@@ -1,0 +1,31 @@
+{
+  "sidebar": {
+    "look": "Apariencia",
+    "content": "Contenidos",
+    "resources": "Recursos",
+    "activityLog": "Log de actividades",
+    "share": "Compartir",
+    "share2": "",
+    "share3": "",
+    "new": "Nuevo",
+    "edit": "Editar"
+  },
+  "editor": {
+    "welcome": "Editor content"
+  },
+  "button": {
+    "filter": "Filtrar"
+  },
+  "template": {
+    "lastMod": "Última modificación: ",
+    "license": "Tipo de licencia: "
+  },
+  "label": {
+    "Keyword": "Palabra clave",
+    "keyword": "Palabra clave",
+    "categories": "Categorías"
+  },
+  "detailT": {
+    "title": "Detalle plantilla"
+  }
+}

@@ -18,7 +18,7 @@ export class Api {
 
     call(method, params = null) {
         if (method in this._api) {
-            return this._api[method].apply(this._api, params);
+            return this._api[method].apply(this._api, [params]);
         }
         console.log("Api method '" + method + "' doesn't exist");
         return null;

@@ -1,0 +1,31 @@
+{
+  "sidebar": {
+    "look": "Look and Feel",
+    "content": "Contents",
+    "resources": "Resources",
+    "activityLog": "Activity Log",
+    "share": "Share",
+    "share2": "",
+    "share3": "",
+    "new": "New",
+    "edit": "Edit"
+  },
+  "editor": {
+    "welcome": "Welcome"
+  },
+  "button": {
+    "filter": "Filter"
+  },
+  "template": {
+    "lastMod": "Last Modified",
+    "license": ""
+  },
+  "label": {
+    "Keyword": "keyword",
+    "keyword": "",
+    "categories": ""
+  },
+  "detailT": {
+    "title": ""
+  }
+}

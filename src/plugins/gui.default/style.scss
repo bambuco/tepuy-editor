@@ -2,14 +2,13 @@ header, section, footer {
     position: fixed;
     left: 0;
     right: 0;
-    background-color: #323232;
+    background-color: #888;
     color: #fff;
 }
 
 header {
     top: 0;
-    height: 50px;
-    color: #b6b6b6;
+    height: 30px;
 }
 
 section {
@@ -23,9 +22,9 @@ section {
 }
 
 #tpe-sidebar {
-    width: 230px;
-    background:#4d4d4d;
+    width: 200px;
     border-right: solid 1px #333;
+    background:#4d4d4d;
 }
 
 #tpe-content {
@@ -63,22 +62,6 @@ footer {
     }
 }
 
-#tab_new{
-   background:#4d4d4d;
-   border:0;
-   color:#FFF;
-   text-align: center;
-}
-
-#resultados{
-    height: 100%;
-    max-height: 96%;
-    overflow: auto;
-}
-
-#tab_new label{
-    border-bottom: 1px #ffffff70 solid;
-}
 .template-result{
     background: #fff;
     color: #000 ;
@@ -87,19 +70,38 @@ footer {
     text-align: center;
     border: 1px #595959 solid;
     float: left;
+
+    p{
+        text-align: justify;
+        margin: 15px;
+    }
+    span{
+        font-size: 12px;
+        font-weight: bold;
+    }
+    img{
+        margin-top: 12px;
+    }
 }
 
-.date_mod{
-    font-weight: 500;
-    font-size: 14px;
+#keyword{
+    width: 155px;
+    height: 32px;
+    border-radius: 0;
+    margin-left:-8px;
+    background: #4d4d4d;
+    color: #878787;
+    text-align: center;
 }
-
-.ui-menu{
-    background: #323232;
-    color: #FFFFFF;
+#detailText{
+    float: left;
+    width: 60%;
+    text-align: justify;
+    margin-right: 3px;
+    
 }
-.btn_filtro{
-
+.btn_filter
+{
     background: #333333;
     color: #FFFFFF;
     width: 60%;
@@ -113,14 +115,6 @@ footer {
     }
 }
 
-.ui-tabs{
-    border-top-left-radius: 0;
-    .ui-tabs-nav{
-        background: #4d4d4d;
-        border: 0;
-    }
-}
-
 .ui-state-active, 
 .ui-widget-content .ui-state-active, 
 .ui-widget-header .ui-state-active, 
@@ -131,38 +125,4 @@ a.ui-button:active,
     border: 0;
     background: #e6e6e6;
     color: #000000;
-}
-.ui-tabs-collapsible .ui-tabs-nav li.ui-tabs-active .ui-tabs-anchor{
-    color:#000;    
-}
-
-#palabraClave{
-    height: 32px;
-    border-radius: 0;
-    margin-left:-8px;
-    background: #4d4d4d;
-    color: #878787;
-    text-align: center;
-}
-
-.categorias{
-    text-align: left;
-    margin: 10px;
-}
-
-
-.ui-widget.ui-widget-content{
-    border-radius: 0;
-    padding:0;
-}
-.ordenar{
-    padding-top: 20px;
-    padding-left: 20px;
-
-    select{
-        height: 45px;
-        width: 18%;
-        border-radius: 0;
-        color: #ccc;
-    }
 }

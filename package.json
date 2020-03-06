@@ -48,6 +48,7 @@
     "gulp-sourcemaps": "^2.6.5",
     "gulp-uglify": "^3.0.2",
     "html-minifier": "^4.0.0",
+    "i18next-scanner": "^2.10.3",
     "postcss-cssnext": "^3.1.0",
     "postcss-nested": "^4.2.1",
     "postcss-simple-vars": "^5.0.2",
@@ -61,8 +62,11 @@
     "rollup-plugin-uglify": "^6.0.4"
   },
   "dependencies": {
+    "@fortawesome/fontawesome-free": "^5.12.1",
     "debug": "^4.1.1",
-    "express": "^4.17.1",
+    "i18next": "^19.3.2",
+    "i18next-xhr-backend": "^3.2.2",
+    "jquery-i18next": "^1.2.1",
     "jquery-ui-dist": "^1.12.1",
     "jsviews": "^1.0.5"
   }

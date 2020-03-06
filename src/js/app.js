@@ -1,6 +1,10 @@
+import i18next from 'i18next';
+import Backend from 'i18next-xhr-backend';
+import jqueryI18next from 'jquery-i18next';
 import properties from './properties';
 import { sortInsert } from './utils';
 import { Api } from './api';
+
 
 class App {
 
@@ -27,14 +31,16 @@ class App {
             }
             else {
                 import(`../plugins/${plugin.id}/component.js`).then(function (pClass) {
-                    this.plugins[plugin.id] = new pClass();
+                    this.plugins[plugin.id] = new pClass(this); //pass a reference to the App
                 })
             }
         }
 
-        this.api = new Api(options.api);
-        this.invokeHook('gui_initialize');
-        this.ui.load('home');
+        this.initLanguage().then(() => {
+            this.api = new Api(options.api);
+            this.invokeHook('gui_initialize');
+            this.ui.load('home');
+        });
     }
 
     parseOptions(options) {
@@ -57,6 +63,27 @@ class App {
         for(let hook of hooks) {
             hook.callback.apply(null, params);
         }
+    }
+
+    initLanguage() {
+        return i18next
+        .use(Backend)
+        .init({
+            lng: 'es',
+            fallbackLng: 'es',
+            ns: ['core'],
+            defaultNS: 'core',
+            backend: {
+                loadPath: 'i18n/{{lng}}/{{ns}}.json'
+            }
+        }, function(err, t) {
+            jqueryI18next.init(i18next, $);
+            i18next.on('languageChanged', () => {
+                $('body').localize();
+            });
+
+            App.i18n = i18next; //Give the App object access to the while translation system
+        });
     }
 }
 
