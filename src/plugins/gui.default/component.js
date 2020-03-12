@@ -34,6 +34,20 @@ export class GuiDefault {
             },
         });
         $(App.container).find('header').localize();
+
+
+        //UserData
+       console.log(App.api.call('getUserData'));
+       var data = App.api.call('getUserData'),
+       pageTmpl = $.templates("#pageTmpl");
+       $('#page').localize();
+     
+     pageTmpl.link("#page", data, {
+    
+     });
+     
+
+
     }
 
     menuAction(ev, ui) {

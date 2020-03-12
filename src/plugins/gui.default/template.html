@@ -18,6 +18,8 @@
     </footer>
 </script>
 
+
+
 <script id="gui-default-menu" type="text/x-template">
     <li data-id="{{:id}}">
         <div>{{:~icon(id)}}{{:~translate(~idPrefix+id)}}</div>
@@ -62,3 +64,23 @@
   {{/if}}
 </li>
 </script>
+
+
+<script id="pageTmpl" type="text/x-template">
+  profile
+  {^{menu ~userProfile width=150}}
+    <li>
+      <div>
+        <span class="ui-icon ui-icon-user"></span>
+        {{:name}}
+      </div>
+    </li>
+    <li>
+      <div>
+        <span class="ui-icon ui-icon-close" data-i18n="account-close"></span>Salir
+      </div>
+    </li>
+  {{/menu}}
+</script>
+  
+<div id="page"></div>

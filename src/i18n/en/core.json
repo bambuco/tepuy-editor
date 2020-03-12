@@ -31,5 +31,6 @@
   "general": {
     "create": "",
     "close": ""
-  }
+  },
+  "account-close": ""
 }

@@ -33,6 +33,16 @@
         license:'GPL'
     }];
 
+    var userData =[
+        {
+            id:'1',
+            userName:'David.Rios',
+            password:'123456',
+            name:'David Rios',
+            profile_image:'https://picsum.photos/50/50?t=4'
+        }
+    ]
+
     var fakeApi = {
         getTemplates: function (filter) {
           return templates.filter(item => {
@@ -52,6 +62,10 @@
         },
         getTemplateCategories: function() {
           return ['Category 1', 'Category 2', 'Category 3'];
+        },
+
+        getUserData: function(){
+            return userData;
         }
     };
     window.fakeApi = fakeApi;

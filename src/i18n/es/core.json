@@ -47,5 +47,6 @@
   "general": {
     "create": "Crear",
     "close": "Cerrar"
-  }
+  },
+  "account-close": "Salir"
 }
