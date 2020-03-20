@@ -25,7 +25,8 @@
     "view_responsive": "Diseño adaptable",
     "help": "Ayuda",
     "help_manual": "Guía de usuario",
-    "help_about": "Acerca de"
+    "help_about": "Acerca de",
+    "profile_logout": "Salir"
   },
   "tree": {
     "root": "Inicio"

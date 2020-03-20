@@ -31,5 +31,13 @@
   "general": {
     "create": "",
     "close": ""
+<<<<<<< Updated upstream
+=======
+  },
+  "account-close": "",
+  "account-logout": "",
+  "menu": {
+    "profile_logout": ""
+>>>>>>> Stashed changes
   }
 }
