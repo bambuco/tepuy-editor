@@ -65,7 +65,7 @@ export class GuiEditor {
         App.ui.load('home');
     }
     about() {
-        $("#dialog").dialog({ modal: true});
+        $("#about-dialog").dialog({ modal: true});
     }
     logout(){
         console.log("Salir");
