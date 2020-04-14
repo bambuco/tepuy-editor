@@ -1,67 +1,50 @@
 {
+  "menu": {
+    "profile_logout": ""
+  },
+  "about": {
+    "title": "",
+    "description": "",
+    "version": "",
+    "creators": "",
+    "financedBy": "",
+    "license": ""
+  },
   "sidebar": {
-    "look": "Apariencia",
-    "content": "Contenidos",
-    "resources": "Recursos",
-    "activityLog": "Log de actividades",
-    "share": "Compartir",
-    "new": "Nuevo",
-    "edit": "Editar"
+    "content": "",
+    "look": "",
+    "resources": "",
+    "activityLog": "",
+    "share": "",
+    "new": "",
+    "edit": ""
   },
   "editor": {
     "content": {
-      "objecttree": "Arbol de contenidos",
-      "othersections": "Secciones independientes"
+      "objecttree": "",
+      "othersections": ""
     }
   },
-  "menu": {
-    "file": "Archivo",
-    "file_properties": "Propiedades",
-    "file_metadata": "Metadatos",
-    "file_download": "Descargar",
-    "file_exit": "Volver al inicio",
-    "view": "Vista",
-    "view_preview": "Vista previa",
-    "view_responsive": "Diseño adaptable",
-    "help": "Ayuda",
-    "help_manual": "Guía de usuario",
-    "help_about": "Acerca de",
-    "profile_logout": "Salir"
-  },
   "tree": {
-    "root": "Inicio"
-  },
-  "label": {
-    "keyword": "Palabra clave",
-    "categories": "Categorías"
-  },
-  "button": {
-    "filter": "Filtrar"
+    "root": ""
   },
   "template": {
-    "lastMod": "Ultima modificación: ",
-    "license": "Tipo de licencia: "
-  },
-  "detailT": {
-    "title": "Detalle plantilla"
+    "lastMod": "",
+    "license": ""
   },
   "general": {
-    "create": "Crear",
-    "close": "Cerrar",
-    "description": "Descripción",
-    "creator": "Creador",
-    "license": "Licencia",
-    "category": "Categoría"
+    "description": "",
+    "creator": "",
+    "license": "",
+    "category": "",
+    "create": "",
+    "close": ""
   },
-  "detail": {
-    "description": "Descripción"
+  "label": {
+    "keyword": "",
+    "categories": ""
   },
-  "about": {
-    "description": "Tepuy Editor es un software para la creación de recursos educativos digitales, enfocado a la reutilización y a los conceptos inherentes a los REA.",
-    "version": "Versión: 1.0.0",
-    "creators": "Creado por: Universidad de Medellín  y BambuCo",
-    "financedBy": "Financiado por  el Fondo de Ctel del Sistema General de Regalías",
-    "license": "Licencia GNU/GPL v3",
-    "title": "Acerca de"
+  "button": {
+    "filter": ""
   }
 }
