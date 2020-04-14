@@ -68,7 +68,51 @@
 
         getUserData: function(){
             return userData;
+<<<<<<< Updated upstream
         }
+=======
+        },
+        /*
+        Object resources methods
+        */
+        /*
+        List all resouces (files and folder) at an specified path of the object e.g (/, /content)
+        returns: Array with the list of objects in the given path. 
+        */
+        getResources: function(path){
+            return resoucesData.filter(item=>{
+            var matchPath = null;
+            if(path && path != ''){
+                var res = new RegExp(path,'i');
+                matchPath = res.test(item.path);
+            }
+            return(matchPath == null|| matchPath);
+           });     
+        },
+        /*
+        Will rename a file in the object directory structure
+        returns: { succeed: true | false, message: string };
+        */
+        renameResource: function(resource, newpath){
+            return { succeed: true | false, message: '' };
+        },
+        /*
+        Will delete a file in the object directory structure
+        returns: { succeed: true | false, message: string };
+        */
+        deleteResource: function(resource){
+            return { succeed: true | false, message: '' };
+        },
+        /*
+        Will create a new resource in the directory structure at the given path
+        resouce: { type: F|D, name: string, file: Blob | null }
+        returns: { succeed: true | false, message: string };
+        */
+        createResource: function(resource, path){
+
+        },
+
+>>>>>>> Stashed changes
     };
     window.fakeApi = fakeApi;
 })()
