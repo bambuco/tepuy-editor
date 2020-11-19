@@ -63,7 +63,9 @@ export class StorageMoodle {
             return Promise.resolve([]);
         }
 
-        return TepuyAPI.getObjectsPromise(filter);
+        var metas = [{'key': 'access.username', 'value': TepuyAPI.currentuser.username}]
+
+        return TepuyAPI.getObjectsPromise(filter, metas);
     }
 
     /**
