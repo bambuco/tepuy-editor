@@ -12,7 +12,8 @@ header, section, footer {
 
 header {
     .logo {
-        width: 36px;
+        max-height: 35px;
+        margin-top: -5px;
     }
 }
 
