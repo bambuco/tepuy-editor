@@ -86,7 +86,7 @@
     "jquery-ui-dist": "^1.12.1",
     "jsviews": "^1.0.5",
     "lodash": "^4.17.20",
-    "moment": "^2.24.0",
+    "moment": "^2.29.4",
     "requirejs": "^2.3.6",
     "uuid": "^8.1.0"
   }
