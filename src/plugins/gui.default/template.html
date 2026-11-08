@@ -5,7 +5,7 @@
             <img class="logo" data-link="src{:'themes/'+theme+'/img/logo_tepuy.png'}" alt="" />
           </li>
           {^{for menu tmpl="#gui-default-menu" ~idPrefix="menu." /}}
-          {^{if user && profile_menu.length }}
+          {^{if showProfileMenu && user && profile_menu.length }}
           <li data-id="profile" class="tpy-menu-right">
             <div>
               <div class="custom-item-wrapper"><img class="tpy-avatar" src="{{:user.profile_image}}" alt="">{{:user.name}}</div>
@@ -236,8 +236,12 @@
 </script>
 
 <script id="gui-default-form-control-label" type="text/x-template">
-  {^{tooltip content=~translate(label+'Help', '') }}
   <span data-link="data-i18n{:label}" title=""></span>{{:~suffix}}
+  {^{tooltip content=~translate(label+'Help', '') hideempty=true }}
+    <i class="fas fa-question-circle" title=""></i>
+  {{/tooltip}}
+  {^{tooltip content=info hideempty=true }}
+    <i class="fas fa-exclamation-circle" title=""></i>
   {{/tooltip}}
   {^{if invalid && errors}}
   <div class="tpy-validation-error">
@@ -262,7 +266,7 @@
     <label>
       {{include tmpl="#gui-default-form-control-label"/}}
     </label>
-    <input type="text" data-link=" 
+    <input type="text" data-link="
       {:value:}
       readonly{:settings.readonly}
       maxlength{:settings.maxLength}
@@ -281,7 +285,7 @@
     <label>
       {{include tmpl="#gui-default-form-control-label"/}}
     </label>
-    <input type="text" data-link=" 
+    <input type="text" data-link="
       {:value:}
       readonly{:settings.readonly}
       autofocus{:settings.default||null}

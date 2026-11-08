@@ -95,7 +95,7 @@ export class AbstractControl {
         if (settings && settings.depends) {
             this.visible = this.visible.bind(this);
             this.visible.depends = Array.isArray(settings.depends) ?
-                settings.depends.map(dep => ['parent.value.', dep].join('')) : 
+                settings.depends.map(dep => ['parent.value.', dep].join('')) :
                 [['parent.value.', settings.depends].join('')];
         }
 
@@ -140,6 +140,10 @@ export class AbstractControl {
         return getSafe(_(this).settings, 'label', '');
     }
 
+    get info() {
+        return getSafe(_(this).settings, 'info', '');
+    }
+
     get settings() {
         return _(this).settings || {};
     }
@@ -170,7 +174,7 @@ export class AbstractControl {
         const settings = _(this).settings;
         if (settings && settings.validityDepends) {
             const dependencies = Array.isArray(settings.validityDepends) ?
-                settings.validityDepends.map(dep => ['value.', dep].join('')) : 
+                settings.validityDepends.map(dep => ['value.', dep].join('')) :
                 [['value.', settings.depends].join('')];
 
             $.observe.apply($, [this.parent, ...dependencies, this._onDependencyValueChanged]);
@@ -297,7 +301,7 @@ export class FormGroup extends AbstractControl {
 
     setControl(name, control) {
         let priv = _(this);
-        delete (priv.controls[name]);        
+        delete (priv.controls[name]);
         if (control) this.addControl(name, control);
     }
 
