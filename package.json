@@ -55,7 +55,7 @@
     "gulp-uglify": "^3.0.2",
     "html-minifier": "^4.0.0",
     "i18next-scanner": "github:jesusoterove/i18next-scanner",
-    "karma": "^5.0.9",
+    "karma": "^6.3.16",
     "karma-chai": "^0.1.0",
     "karma-chrome-launcher": "^3.1.0",
     "karma-mocha": "^2.0.1",
@@ -85,8 +85,8 @@
     "jquery-i18next": "^1.2.1",
     "jquery-ui-dist": "^1.12.1",
     "jsviews": "^1.0.5",
-    "lodash": "^4.17.20",
-    "moment": "^2.29.4",
+    "lodash": "^4.17.21",
+    "moment": "^2.24.0",
     "requirejs": "^2.3.6",
     "uuid": "^8.1.0"
   }
