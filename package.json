@@ -85,7 +85,7 @@
     "jquery-i18next": "^1.2.1",
     "jquery-ui-dist": "^1.12.1",
     "jsviews": "^1.0.5",
-    "lodash": "^4.17.20",
+    "lodash": "^4.17.21",
     "moment": "^2.24.0",
     "requirejs": "^2.3.6",
     "uuid": "^8.1.0"
