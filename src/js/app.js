@@ -13,6 +13,8 @@ const defaultOptions = {
     container: "#tepuy-editor",
     defaultView: 'home', //home|editor
     theme: 'light',
+    profileMenu: true,
+    autoload: null,
     exit: {
         action: 'https://cocreatic.org/'
     }
@@ -74,7 +76,25 @@ class App {
                 this.invokeHook('gui_initialize');
                 return this.auth.authenticate().then(userInfo => {
                     this.data.user = userInfo;
+
+                    if (this.options.autoload) {
+                        return this.storage.getObject(this.options.autoload).then(manifest => {
+                            if (manifest) {
+                                this.data.dco = new this.DcoManager(manifest, this.storage);
+                                this.ui.load('editor', null);
+                                return true;
+                            }
+                            console.log('Object not found: ' + this.options.autoload);
+                            this.ui.load(this.options.defaultView, this.options.viewParams);
+                            return true;
+                        }).catch(err => {
+                            console.error('Failed to load autoload object', err);
+                            throw err;
+                        });
+                    }
+
                     this.ui.load(this.options.defaultView, this.options.viewParams);
+
                     return true;
                 }, err => {
                     console.log('Authenticate failed');

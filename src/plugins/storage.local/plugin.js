@@ -73,6 +73,16 @@ export class StorageLocal {
         })]);
     }
 
+    getObject(id) {
+        if (!id) return Promise.resolve(null);
+        let objects = getCollection('objects');
+        let index = objects.findIndex(o => o.id == id);
+        if (index >= 0) {
+            return Promise.resolve(objects[index]);
+        }
+        return Promise.resolve(null);
+    }
+
     getObjects(filter) {
         return Promise.resolve(getCollection('objects', []));
     }
@@ -92,7 +102,7 @@ export class StorageLocal {
     }
 
     createObject(properties) {
-        const manifest = Object.assign({}, properties);        
+        const manifest = Object.assign({}, properties);
         const template = manifest.templateId == 0 ? emptyTemplate
             : templates.find(t => t.id == manifest.templateId);
         manifest.baseUrl = template.baseUrl;
@@ -143,7 +153,7 @@ export class StorageLocal {
     */
     /*
     List all resouces (files and folder) at an specified path of the object e.g (/, /content)
-    returns: Array with the list of objects in the given path. 
+    returns: Array with the list of objects in the given path.
     */
     getResources(dco, path) {
         const resources = getCollection('res_'+dco.id, []);

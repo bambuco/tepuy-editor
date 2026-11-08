@@ -52,6 +52,24 @@ export class StorageMoodle {
     }
 
     /**
+    * To get a specific objects by guid.
+    *
+    * @param {{id:string}} id The object guid.
+    * @return {Promise<Object>} A Promise that resolves to an objects: {}.
+    */
+    getObject(id) {
+
+        if (!id) return Promise.resolve(null);
+
+        if (typeof(TepuyAPI) == 'undefined') {
+            return Promise.resolve(null);
+        }
+
+        return TepuyAPI.getObjectPromise(id);
+
+    }
+
+    /**
     * To get a list of objects.
     *
     * @param {{keyword:string}} filter An object to indicate how to filter categories. If no keyword all templates are expected.
@@ -63,7 +81,7 @@ export class StorageMoodle {
             return Promise.resolve([]);
         }
 
-        var metas = [{'key': 'access.username', 'value': TepuyAPI.currentuser.username}]
+        var metas = [{'key': 'access[].username', 'value': TepuyAPI.currentuser.username}]
 
         return TepuyAPI.getObjectsPromise(filter, metas);
     }

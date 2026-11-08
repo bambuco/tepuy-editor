@@ -8,10 +8,15 @@ export class Storage {
         this._checkImplementation('getTemplateCategories');
         return this._impl.getTemplateCategories();
     }
-    
+
     getTemplates(filter) {
         this._checkImplementation('getTemplates');
         return this._impl.getTemplates(filter);
+    }
+
+    getObject(id) {
+        this._checkImplementation('getObject');
+        return this._impl.getObject(id);
     }
 
     getObjects(filter) {

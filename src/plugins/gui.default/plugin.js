@@ -88,6 +88,7 @@ export class GuiDefault {
         this.profile_menu = [];
         this.user = App.data.user;
         this.theme = App.options.theme;
+        this.showProfileMenu = App.options.profileMenu;
         if (App.options.exit) {
             const exitText = App.options.exit.text || App.i18n.t('menu.profile_logout');
             this.profile_menu.push({ id: 'profile_logout', icon: 'profile_logout', text: exitText });
