@@ -7,6 +7,7 @@ export const tooltip = {
       tag.content = tagCtx.props.content;
       tag.contentid = tagCtx.props.contentid;
       tag.baseApply(arguments);
+      tag.hideempty = tagCtx.props.hideempty;
   },
   onBind: function() {
     var tag = this;
@@ -20,7 +21,12 @@ export const tooltip = {
     }
     else if (tag.contentid) {
         content = document.getElementById(tag.contentid);
+    } else {
+      if (tag.hideempty) {
+        tag.mainElem.hide();
+        return;
+      }
     }
-    content && tag.mainElem.tooltip("option", "content", content); 
+    content && tag.mainElem.tooltip("option", "content", content);
   }
 };

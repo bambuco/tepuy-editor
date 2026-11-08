@@ -146,7 +146,7 @@ export class Dialog {
             //$contentWin.width(dialogObj.contentWidth)
             //$contentWin.height(dialogObj.contentHeight);
 
-            ////enable drag and resize 
+            ////enable drag and resize
             //$(".dialog-full-mode").resizable('enable');
             //$(".dialog-full-mode").draggable('enable');
 
@@ -237,7 +237,7 @@ export class Dialog {
                 dfmAry[dfmId] = dialogObj;
                 sessionStorage.dfmObj = JSON.stringify(dfmAry);
 
-                //enable drag and resize 
+                //enable drag and resize
                 $(".dialog-full-mode").resizable('enable');
                 $(".dialog-full-mode").draggable('enable');
 

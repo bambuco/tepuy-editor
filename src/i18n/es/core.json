@@ -70,7 +70,8 @@
     "exitTitle": "Tepuy Editor - {{action}}",
     "exitConfirmation": "¿Está seguro que desea {{action}}?",
     "loading": "Cargando...",
-    "id": "ID"
+    "id": "ID",
+    "preview": "Vista previa"
   },
   "detail": {
     "description": "Descripción"
@@ -142,6 +143,7 @@
     "propertiesTitle": "Propiedades",
     "generalconfig": "Configuración general",
     "shareList": "Invitar a personas",
+    "shareListHelp": "Escriba un correo, selecciones si tiene permisos para editar o sólo para ver y presione <em>Agregar</em>. Puede invitar a varias personas pero debe hacerlo un correo a la vez.",
     "shareAsTemplate": "Compartir como plantilla",
     "interactionMode": "Modo de interacción",
     "viewOptions": "Opciones de visualización",
