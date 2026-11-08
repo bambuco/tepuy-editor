@@ -28,6 +28,10 @@
           }
         };
 
+        if (TepuyAPI.initguid) {
+          props.autoload = TepuyAPI.initguid;
+        }
+
         if (TepuyAPI.tpl) {
           props.viewParams = {
            afterTemplatesLoadOnce: (view, templates) => {

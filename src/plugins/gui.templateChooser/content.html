@@ -23,7 +23,7 @@
         {{/for}}
     </div>
 
-    <div id="templateDetail" style="display:none;" data-link="title{:model^activeTemplate.name onerror=''}">
+    <div id="templateDetail" style="display:none;">
         {^{include model.activeTemplate}}
         <div class="template-card">
             <div class="template-content">
@@ -32,9 +32,14 @@
                 <h4 data-i18n="general.license"></h4><em>{^{:license}}</em>
                 <h4 data-i18n="general.category"></h4><em>{^{:category}}</em>
             </div>
+            {{if published}}
             <div class="template-image" >
                  <img src="{{>preview}}" /><br>
+                 <a href="{{>url}}" target="_blank">
+                    <button class="ui-button ui-widget ui-corner-all" data-i18n="general.preview"></button>
+                </a>
             </div>
+            {{/if}}
         </div>
         {{/include}}
         <div class="template-buttons">
