@@ -1,0 +1,46 @@
+/**
+ * Default Tepuy design tokens. Themes override these on :root or body.
+ * Components use var(--token, fallback) and do not add their own colors.
+ *
+ * @copyright 2026 David Herney - BambuCo
+ * @license http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ */
+
+:root {
+  --tepuy-color-bg: #f2f2f2;
+  --tepuy-color-text: #222222;
+  --tepuy-color-heading: #3f637e;
+  --tepuy-color-border: #d3d3d3;
+  --tepuy-color-shadow: #c2c2c2;
+  --tepuy-font-family: sans-serif;
+  --tepuy-font-size: 14px;
+  --tepuy-radius-box: 10px;
+  --tepuy-radius-control: 0px;
+
+  --tepuy-color-correct: #2e7d32;
+  --tepuy-color-incorrect: #d60c1b;
+  --tepuy-color-partial: #f2d84c;
+  --tepuy-color-unanswered: #9e9e9e;
+  --tepuy-color-info: #3476a3;
+  --tepuy-color-warning: #f2d84c;
+  --tepuy-color-danger: #d60c1b;
+  --tepuy-color-link: #f7931e;
+
+  --tepuy-color-important: #e2793d;
+  --tepuy-color-important-text: #ffffff;
+  --tepuy-color-example: #e5e5e6;
+  --tepuy-color-example-text: #222222;
+  --tepuy-color-note: #f6f5f2;
+  --tepuy-color-note-text: #808080;
+  --tepuy-color-link-bg: #222d32;
+  --tepuy-color-link-text: #ffffff;
+  --tepuy-color-connection: #3476a3;
+  --tepuy-color-connection-text: #ffffff;
+  --tepuy-color-activity: #f5f0f5;
+  --tepuy-color-activity-text: #222222;
+
+  --tepuy-color-nav-bg: #ffffff;
+  --tepuy-color-nav-text: #222222;
+  --tepuy-color-nav-active: #3f637e;
+  --tepuy-color-progress: #3f637e;
+}

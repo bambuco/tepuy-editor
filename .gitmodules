@@ -1,0 +1,3 @@
+[submodule "vendor/edy"]
+	path = vendor/edy
+	url = https://github.com/bambuco/edy-tor.git

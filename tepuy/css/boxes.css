@@ -1,0 +1,49 @@
+/**
+ * Semantic text blocks. Colors come from tokens, with the base-theme values as fallbacks.
+ *
+ * @copyright 2026 David Herney - BambuCo
+ * @license http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ */
+
+.box-text {
+  max-width: 800px;
+  margin: 15px auto;
+  padding: 20px;
+  border-radius: var(--tepuy-radius-box, 10px);
+  box-shadow: 3px 3px 3px 2px var(--tepuy-color-shadow, #c2c2c2);
+}
+
+.box-text.important {
+  background: var(--tepuy-color-important, #e2793d);
+  color: var(--tepuy-color-important-text, #ffffff);
+}
+
+.box-text.example {
+  background: var(--tepuy-color-example, #e5e5e6);
+  color: var(--tepuy-color-example-text, #222222);
+}
+
+.box-text.note {
+  background: var(--tepuy-color-note, #f6f5f2);
+  color: var(--tepuy-color-note-text, #808080);
+}
+
+.box-text.link {
+  background: var(--tepuy-color-link-bg, #222d32);
+  color: var(--tepuy-color-link-text, #ffffff);
+}
+
+.box-text.link .title,
+.box-text.link em {
+  color: var(--tepuy-color-link, #f7931e);
+}
+
+.box-text.connection {
+  background: var(--tepuy-color-connection, #3476a3);
+  color: var(--tepuy-color-connection-text, #ffffff);
+}
+
+.box-text.activity {
+  background: var(--tepuy-color-activity, #f5f0f5);
+  color: var(--tepuy-color-activity-text, #222222);
+}

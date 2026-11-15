@@ -1,0 +1,24 @@
+{
+  "id": "base",
+  "name": "Base",
+  "version": "1.0.0",
+  "positions": [
+    "nav.main",
+    "nav.globals",
+    "#tpy-measuring_progress",
+    "nav.secondary",
+    "#tpy-subpages_menu",
+    "#tpy-page_number",
+    "#tpy-results_page",
+    "#tpy-pg_credits",
+    "#tpy-pg_bibliography",
+    "#tpy-auto_citation",
+    ".tpy-page-title",
+    "main > section"
+  ],
+  "variables": {
+    "--tepuy-color-bg": "#f2f2f2",
+    "--tepuy-color-heading": "#3f637e",
+    "--tepuy-color-important": "#e2793d"
+  }
+}

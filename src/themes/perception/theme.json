@@ -1,0 +1,24 @@
+{
+  "id": "perception",
+  "name": "Perception",
+  "version": "1.0.0",
+  "positions": [
+    "nav.main",
+    "nav.globals",
+    "#tpy-measuring_progress",
+    "nav.secondary",
+    "#tpy-subpages_menu",
+    "#tpy-page_number",
+    "#tpy-results_page",
+    "#tpy-pg_credits",
+    "#tpy-pg_bibliography",
+    "#tpy-auto_citation",
+    ".tpy-page-title",
+    "main > section"
+  ],
+  "variables": {
+    "--tepuy-color-bg": "#f7f4fb",
+    "--tepuy-color-heading": "#5e35b1",
+    "--tepuy-color-important": "#6a1b9a"
+  }
+}
