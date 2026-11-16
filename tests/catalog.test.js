@@ -29,6 +29,9 @@ test('every control has one Edit command and identifiers do not repeat', () => {
 test('blocks and activities stay in their groups', () => {
   const blocks = CONTROL_GROUPS.find((group) => group.id === 'blocks');
   const activities = CONTROL_GROUPS.find((group) => group.id === 'activities');
+  const text = CONTROL_GROUPS.find((group) => group.id === 'text');
+  const format = CONTROL_GROUPS.find((group) => group.id === 'format');
+  const macro = CONTROL_GROUPS.find((group) => group.id === 'macro');
   assert.deepEqual(blocks.controls.map((control) => controlLabel(control)), [
     'Importante',
     'Ejemplo',
@@ -39,12 +42,13 @@ test('blocks and activities stay in their groups', () => {
   ]);
   assert.deepEqual(activities.controls.map((control) => controlLabel(control)), [
     'Quiz',
-    'Cloze',
-    'Arrastrar y soltar',
-    'Crucigrama',
-    'Sopa de letras',
-    'Emparejar',
   ]);
+  assert.equal(text.controls.some((control) => control.id === 'richtext'), true);
+  assert.equal(text.controls.some((control) => control.id === 'htmlfree'), true);
+  assert.equal(text.controls.some((control) => control.id === 'paragraph'), false);
+  assert.equal(format.controls.map((control) => control.id).includes('tabs'), true);
+  assert.equal(format.controls.some((control) => control.id === 'accordion'), false);
+  assert.equal(macro.controls[0].id, 'modal');
 });
 
 test('View groups appearance and preview size as submenus', () => {
@@ -64,6 +68,13 @@ test('View groups appearance and preview size as submenus', () => {
   assert.equal(preview.commandId, undefined);
   assert.deepEqual(preview.submenu.map((item) => item.label), ['Automática', 'Escritorio', 'Móvil']);
   assert.equal(preview.submenu.every((item) => item.commandId), true);
+});
+
+test('File export labels group SCORM and HTML package', () => {
+  assert.equal(messages.es['menu.file.export'], 'Exportar');
+  assert.equal(messages.es['menu.file.export-scorm'], 'SCORM 1.2');
+  assert.equal(messages.es['menu.file.export-html'], 'Paquete HTML');
+  assert.equal(messages.es['menu.help.about'], 'Acerca de Tepuy');
 });
 
 test('menu strings follow the editor locale', () => {

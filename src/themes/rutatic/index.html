@@ -7,7 +7,19 @@
   <title>Tepuy</title>
   <link rel="stylesheet" href="theme.css">
 </head>
-<body>
-  <p><a href="content.html">Abrir el contenido</a></p>
+<body data-autoload="false" data-display-window="top">
+  <div id="body">
+    <h1 class="metadata" data-key="title"></h1>
+    <div id="content">
+      <p class="metadata" data-key="topic"></p>
+      <section class="metadata" data-key="description"></section>
+      <section class="metadata" data-key="objective"></section>
+      <p class="metadata" data-key="duration" data-unit="hours"></p>
+      <span class="metadata" data-key="participation"></span>
+      <span class="metadata" data-key="modality"></span>
+      <span class="metadata" data-key="synchronicity"></span>
+      <div id="play_scorm"></div>
+    </div>
+  </div>
 </body>
 </html>

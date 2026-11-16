@@ -55,7 +55,7 @@ test('package round-trip keeps nav.main data-page items', () => {
     'pag-actividades',
   ]);
   const saved = serializePackage(main, { title: 'Curso' }, { themeId: 'base', mainMenu }, DOMParser);
-  assert.match(saved, /<nav class="main">/);
+  assert.match(saved, /<nav[^>]*class="[^"]*\bmain\b/);
   assert.match(saved, /data-page="pag-introduccion"/);
   const again = readPackageContent(saved, 'base', DOMParser);
   assert.deepEqual(extractMainMenuItems(again.mainMenu), extractMainMenuItems(mainMenu));

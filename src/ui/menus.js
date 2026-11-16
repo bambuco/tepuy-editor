@@ -5,7 +5,7 @@
  * @license http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-import { confirmDialog } from '../../vendor/edy/src/ui/controls.js';
+import { confirmDialog, openDialog } from '../../vendor/edy/src/ui/controls.js';
 import { t } from '../i18n/messages.js';
 import { nodeAt } from '../core/edit.js';
 import { readPackageSettings } from '../core/package.js';
@@ -28,6 +28,7 @@ import {
   hasDraft,
   hasUnsavedChanges,
   insertControl,
+  buildIndexForTheme,
   openHostPackage,
   openPackageSettings,
   recordOperation,
@@ -281,6 +282,21 @@ export function registerMenus(context) {
   registerCommand(context, 'file.import', t('menu.file.import'), later(context, t('menu.notice.import')));
   registerCommand(context, 'file.export-scorm', t('menu.file.export-scorm'), later(context, t('menu.notice.export-scorm')));
   registerCommand(context, 'file.export-html', t('menu.file.export-html'), later(context, t('menu.notice.export-html')));
+  registerCommand(context, 'help.about', t('menu.help.about'), () => {
+    const body = document.createElement('div');
+    body.className = 'tepuy-about';
+    const editor = document.createElement('p');
+    editor.textContent = t('menu.help.about-editor');
+    const template = document.createElement('p');
+    template.textContent = t('menu.help.about-template');
+    body.append(editor, template);
+    openDialog({
+      title: t('menu.help.about'),
+      content: body,
+      closeLabel: t('dialog.close'),
+      container: currentEditor()?.shadow ?? document.body,
+    });
+  });
 
   registerCommand(context, 'edit.undo', t('menu.edit.undo'), () => {
     if (!undoDocument()) {
@@ -369,19 +385,11 @@ export function registerMenus(context) {
         context.notifications.info(t('menu.notice.insert-nowhere'));
         return;
       }
-      if (result === 'index') {
-        context.views.open('index-html');
-      }
       if (result === 'inserted') {
         context.views.open('content-html');
         void recordOperation('add', control.id, control.label);
       }
-      const notice = result === 'settings'
-        ? 'menu.notice.settings-open'
-        : result === 'index'
-          ? 'menu.notice.index-html'
-          : 'menu.notice.inserted';
-      context.notifications.success(t(notice, { label: control.label }));
+      context.notifications.success(t('menu.notice.inserted', { label: control.label }));
     });
   }
 
@@ -398,6 +406,7 @@ export function registerMenus(context) {
   }
   registerCommand(context, 'view.presentation', t('menu.view.presentation'), () => {
     setPackageView('presentation');
+    context.views.open('index-html');
     markActive([
       menuEntry(context.extensionId, 'view', 'presentation'),
       menuEntry(context.extensionId, 'view', 'content'),
@@ -406,6 +415,7 @@ export function registerMenus(context) {
   });
   registerCommand(context, 'view.content', t('menu.view.content'), () => {
     setPackageView('content');
+    context.views.open('content-html');
     markActive([
       menuEntry(context.extensionId, 'view', 'presentation'),
       menuEntry(context.extensionId, 'view', 'content'),
@@ -427,7 +437,9 @@ export function registerMenus(context) {
       const absent = theme.positions.filter((position) => !presentPositions(layout, theme.positions).includes(position));
       const report = from ? themeChangeReport(from, theme) : { missingPositions: [], changedVariables: [] };
       const missing = [...new Set([...report.missingPositions, ...absent])];
-      replaceDocument(applyTheme(currentDocument()), theme.id);
+      replaceDocument(applyTheme(currentDocument()), theme.id, {
+        index: buildIndexForTheme(theme.id),
+      });
       void recordOperation('theme', theme.id, theme.name);
       syncThemeMenu(context);
       const gaps = missing.length ? t('menu.notice.theme-missing', { positions: missing.join(', ') }) : '';
@@ -447,12 +459,19 @@ export function registerMenus(context) {
     ['save', 'menu.file.save', 'file.save', 30],
     ['reload', 'menu.file.reload', 'file.reload', 40],
     ['import', 'menu.file.import', 'file.import', 50],
-    ['export-scorm', 'menu.file.export-scorm', 'file.export-scorm', 60],
-    ['export-html', 'menu.file.export-html', 'file.export-html', 70],
   ];
   for (const [id, labelKey, commandId, order] of fileItems) {
     context.menus.register('file', { id, label: t(labelKey), commandId, order });
   }
+  context.menus.register('file', {
+    id: 'export',
+    label: t('menu.file.export'),
+    order: 60,
+    submenu: [
+      { id: 'export-scorm', label: t('menu.file.export-scorm'), commandId: 'file.export-scorm', order: 10 },
+      { id: 'export-html', label: t('menu.file.export-html'), commandId: 'file.export-html', order: 20 },
+    ],
+  });
 
   context.menus.register('edit', { id: 'undo', label: t('menu.edit.undo'), commandId: 'edit.undo', shortcut: 'Ctrl+Z', order: 10 });
   context.menus.register('edit', { id: 'redo', label: t('menu.edit.redo'), commandId: 'edit.redo', shortcut: 'Ctrl+Y', order: 20 });
@@ -493,6 +512,8 @@ export function registerMenus(context) {
     })),
   });
   context.menus.register('view', { id: 'settings', label: t('menu.view.settings'), commandId: 'view.settings', order: 60 });
+
+  context.menus.register('help', { id: 'about', label: t('menu.help.about'), commandId: 'help.about', order: 10 });
 
   context.menus.register('context', { id: 'duplicate', label: t('menu.edit.duplicate'), commandId: 'edit.duplicate', order: 10 });
   context.menus.register('context', { id: 'delete', label: t('menu.edit.delete'), commandId: 'edit.delete', order: 20 });

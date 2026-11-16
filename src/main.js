@@ -34,6 +34,11 @@ export async function mountEditor() {
     theme: 'system',
     logo: new URL('./assets/editor-icon.svg', import.meta.url).href,
     title: 'Tepuy',
+    customCss: new URL('./ui/edy-tor.css', import.meta.url).href,
+    initialState: {
+      bottomPanel: { visible: false },
+      preview: { visible: true },
+    },
     services: {},
     extensions: [tepuyShell],
   });

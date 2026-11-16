@@ -13,27 +13,35 @@ import {
   htmlRegions,
   regionHtml,
 } from '../controls/library.js';
+import { getControl, matchableControls } from '../controls/registry.js';
 import { nodeAt } from '../core/edit.js';
 import { sanitizeHtml } from '../core/html.js';
 import { extractMainMenuItems, themeHasMainMenu } from '../core/menu.js';
 import { findTheme } from '../core/themes.js';
 import { t } from '../i18n/messages.js';
 import {
+  listMetadataNodes,
+  readMetadata,
+} from '../metadata/index-document.js';
+import { BASE_METADATA, getMetadataField, resolveMetadataKind } from '../metadata/schema.js';
+import {
   addPage,
   applyDraft,
   cancelDraft,
   currentDocument,
   currentEditor,
+  currentIndexDocument,
   currentInsertionPath,
   currentMainMenu,
   currentPageId,
   currentSelectionPath,
-  currentSettings,
   currentThemeId,
   deleteSelection,
+  draftKind,
   focusHtml,
   hasDraft,
   htmlFocusTarget,
+  indexDraft,
   moveSelection,
   pageIndexById,
   recordOperation,
@@ -41,39 +49,10 @@ import {
   selectSlot,
   setCurrentPageId,
   setHtmlDraft,
+  setIndexDraft,
+  setPackageView,
   subscribeSession,
 } from './session.js';
-
-const CANVAS_STYLE = `
-.tepuy-canvas { display: flex; flex-direction: column; height: 100%; min-height: 0; background: var(--tepuy-color-bg, #f2f2f2); color: var(--tepuy-color-heading, #24323a); }
-.tepuy-canvas__crumbs { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; padding: 8px 12px; background: #fff; border-bottom: 1px solid #d5dde3; }
-.tepuy-canvas__crumbs button { border: 0; background: transparent; color: inherit; cursor: pointer; padding: 2px 4px; }
-.tepuy-canvas__scroll { flex: 1; overflow: auto; padding: 16px 20px 48px; }
-.tepuy-block { position: relative; margin: 10px 0; padding: 12px 10px 8px; border: 1px solid transparent; background: rgba(255,255,255,.72); }
-.tepuy-block.is-selected { border-color: var(--tepuy-color-important, #e2793d); }
-.tepuy-block__chrome { display: none; position: absolute; top: 0; left: 0; right: 0; z-index: 2; justify-content: space-between; gap: 8px; padding: 2px; }
-.tepuy-block:hover > .tepuy-block__chrome { display: flex; }
-.tepuy-block:hover:has(.tepuy-block:hover) > .tepuy-block__chrome { display: none; }
-.tepuy-block.is-editing > .tepuy-block__chrome { display: flex; }
-.tepuy-block__chrome button, .tepuy-slot, .tepuy-canvas__crumbs button { font: inherit; }
-.tepuy-block__actions { display: flex; gap: 4px; margin-left: auto; }
-.tepuy-block__drag { cursor: grab; }
-.tepuy-block__actions { margin-left: auto; display: flex; gap: 4px; }
-.tepuy-slot { display: block; width: 100%; min-height: 2.2rem; margin-top: 8px; border: 1px dashed #7f97a6; background: transparent; color: inherit; cursor: pointer; }
-.tepuy-slot.is-target, .tepuy-drop.is-drop { outline: 2px solid var(--tepuy-color-important, #e2793d); }
-.tepuy-slot--page { margin: 24px 0; min-height: 3rem; font-weight: 600; }
-.tepuy-main-menu { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; padding: 8px 0; border-bottom: 1px solid #d5dde3; }
-.tepuy-main-menu button { font: inherit; border: 0; background: transparent; color: inherit; cursor: pointer; padding: 4px 8px; }
-.tepuy-main-menu button.is-active { border-bottom: 2px solid var(--tepuy-color-important, #e2793d); font-weight: 700; }
-.tepuy-drop { height: 8px; margin: 2px 0; }
-.tepuy-html { min-height: 1.6rem; padding: 4px; cursor: text; }
-.tepuy-html__label, .tepuy-badge { font-size: .8rem; font-weight: 700; }
-.tepuy-locked { padding: 12px; border: 1px solid #d5dde3; background: #fff; }
-.tepuy-tabs { display: flex; flex-direction: column; gap: 12px; }
-.tepuy-panel-edit { padding: 8px; border: 1px dashed #c5d0d8; }
-.tepuy-canvas .edy-form__actions { display: none; }
-.tepuy-canvas img, .tepuy-canvas video { max-width: 100%; }
-`;
 
 /**
  * @param {number[]|null} left Path.
@@ -267,8 +246,8 @@ function toDom(node) {
  * @returns {string} Stable key for the open editor.
  */
 function focusKey(target) {
-  if (target.scope === 'settings') {
-    return `settings:${target.name}`;
+  if (target.scope === 'metadata') {
+    return `metadata:${target.key}`;
   }
   return `node:${(target.path || []).join('.')}:${target.regionId}`;
 }
@@ -276,36 +255,51 @@ function focusKey(target) {
 /**
  * Builds the editing surface for one package document.
  * @param {'content'|'index'} mode Canvas document.
+ * @param {Object} context Edy extension context.
  * @returns {{element: HTMLElement, dispose: Function}} Editor contribution.
  */
-export function renderCanvas(mode) {
+export function renderCanvas(mode, context) {
+  const viewId = mode === 'index' ? 'index-html' : 'content-html';
+  setPackageView(mode === 'index' ? 'presentation' : 'content');
   const section = document.createElement('section');
   section.className = 'tepuy-canvas';
   section.tabIndex = 0;
-  const editor = currentEditor();
-  if (editor?.shadow && !editor.shadow.querySelector('[data-tepuy-canvas-style]')) {
-    const style = document.createElement('style');
-    style.dataset.tepuyCanvasStyle = 'true';
-    style.textContent = CANVAS_STYLE;
-    editor.shadow.append(style);
-  }
   const theme = findTheme(currentThemeId());
   for (const [name, value] of Object.entries(theme?.variables || {})) {
     if (/^--tepuy-[a-z0-9-]+$/.test(name) && /^[#a-zA-Z0-9(),.%\s-]+$/.test(String(value))) {
       section.style.setProperty(name, String(value));
     }
   }
-  const crumbs = document.createElement('nav');
-  crumbs.className = 'tepuy-canvas__crumbs';
-  crumbs.setAttribute('aria-label', t('canvas.crumbs'));
   const scroller = document.createElement('div');
   scroller.className = 'tepuy-canvas__scroll';
-  section.append(crumbs, scroller);
+  section.append(scroller);
+  /** @type {HTMLElement|null} */
+  let indexActions = null;
+  if (mode === 'index') {
+    indexActions = document.createElement('div');
+    indexActions.className = 'tepuy-index-actions';
+    indexActions.append(
+      actionButton(t('menu.edit.apply'), () => {
+        const result = applyDraft();
+        if (result === 'invalid') {
+          notify(t('menu.notice.invalid'));
+        }
+      }),
+      actionButton(t('menu.edit.cancel'), () => {
+        cancelDraft();
+      }),
+    );
+    section.append(indexActions);
+  }
+  /** @type {string} */
+  let crumbSignature = '';
 
   /** @type {{path: number[], pointerId: number, drop?: {parentPath: number[], index: number}}|null} */
   let drag = null;
   /** @type {HTMLFormElement|null} */
   let editorForm = null;
+  /** @type {HTMLFormElement|null} */
+  let indexForm = null;
   /** @type {string} */
   let editorKey = '';
 
@@ -640,42 +634,147 @@ export function renderCanvas(mode) {
   }
 
   /**
-   * @param {string} name intro or objective.
-   * @returns {HTMLElement} Presentation HTML block.
+   * @returns {string[]} Metadata keys in schema order, then unknowns from the document.
    */
-  function settingsBlock(name) {
-    const focus = htmlFocusTarget();
-    const editing = blockIsEditing(focus, null, name);
-    const block = document.createElement('article');
-    block.className = 'tepuy-block';
-    block.classList.toggle('is-editing', editing);
-    const title = document.createElement('h2');
-    title.textContent = t(`settings.${name}`);
-    const zone = document.createElement('div');
-    zone.className = 'tepuy-html';
-    zone.dataset.htmlKey = `settings:${name}`;
-    appendFragment(zone, currentSettings()[name] || '', 'rich');
-    const open = () => {
-      if (focusHtml({ scope: 'settings', name }) === 'pending') {
-        notify(t('menu.notice.pending'));
+  function indexMetadataKeys() {
+    const seen = new Set(BASE_METADATA.map((field) => field.id));
+    const keys = BASE_METADATA.map((field) => field.id);
+    for (const item of listMetadataNodes(currentIndexDocument().body)) {
+      if (!seen.has(item.key)) {
+        seen.add(item.key);
+        keys.push(item.key);
       }
-    };
-    zone.addEventListener('click', (event) => {
-      event.stopPropagation();
-      open();
+    }
+    return keys;
+  }
+
+  /**
+   * @param {HTMLFormElement} form Index metadata form.
+   * @returns {Object<string, {value: string, unit?: string}>} Values from the form.
+   */
+  function readIndexForm(form) {
+    /** @type {Object<string, {value: string, unit?: string}>} */
+    const values = {};
+    for (const key of indexMetadataKeys()) {
+      const kind = resolveMetadataKind(key);
+      const field = getMetadataField(key);
+      const control = form.elements?.namedItem?.(key) || form.querySelector(`[name="${CSS.escape(key)}"]`);
+      const value = control && 'value' in control ? String(control.value ?? '') : '';
+      if (kind === 'number') {
+        const unitControl = form.elements?.namedItem?.(`${key}__unit`)
+          || form.querySelector(`[name="${CSS.escape(`${key}__unit`)}"]`);
+        const unit = unitControl && 'value' in unitControl
+          ? String(unitControl.value || field?.defaultUnit || 'hours')
+          : (field?.defaultUnit || 'hours');
+        values[key] = { value, unit };
+      }
+      else {
+        values[key] = { value };
+      }
+    }
+    return values;
+  }
+
+  /**
+   * @returns {HTMLFormElement} Single form for all index metadata.
+   */
+  function renderIndexForm() {
+    const applied = readMetadata(currentIndexDocument().body);
+    const pending = indexDraft();
+    const values = pending || applied;
+    /** @type {Array<Object>} */
+    const fields = [];
+    for (const key of indexMetadataKeys()) {
+      const kind = resolveMetadataKind(key);
+      const field = getMetadataField(key);
+      const label = field ? t(`metadata.${key}`) : key;
+      const current = values[key] || { value: '', unit: field?.defaultUnit };
+      if (kind === 'rich') {
+        fields.push({
+          name: key,
+          label,
+          type: 'tinymce',
+          mode: 'custom',
+          value: current.value || '',
+          options: {
+            menubar: false,
+            plugins: 'link lists',
+            toolbar: 'undo redo | bold italic | bullist numlist | link | removeformat',
+          },
+        });
+        continue;
+      }
+      if (kind === 'number') {
+        fields.push({
+          name: key,
+          label,
+          type: 'text',
+          value: current.value || '',
+        });
+        fields.push({
+          name: `${key}__unit`,
+          label: '\u00a0',
+          type: 'select',
+          value: current.unit || field?.defaultUnit || 'hours',
+          options: (field?.units || ['hours']).map((item) => ({
+            value: item,
+            label: t(`metadata.unit.${item}`),
+          })),
+        });
+        continue;
+      }
+      if (kind === 'select') {
+        fields.push({
+          name: key,
+          label,
+          type: 'select',
+          value: current.value || '',
+          options: (field?.options || []).map((item) => ({
+            value: item,
+            label: t(`metadata.option.${key}.${item}`),
+          })),
+        });
+        continue;
+      }
+      fields.push({
+        name: key,
+        label,
+        type: 'text',
+        value: current.value || '',
+      });
+    }
+    const form = createForm({
+      translate: context.translate,
+      onError: (error) => currentEditor()?.reportError?.(error),
+      onSubmit: () => {
+        const result = applyDraft();
+        if (result === 'invalid') {
+          notify(t('menu.notice.invalid'));
+        }
+      },
+      fields,
     });
-    const bar = document.createElement('div');
-    bar.className = 'tepuy-block__chrome';
-    const actions = document.createElement('span');
-    actions.className = 'tepuy-block__actions';
-    fillChromeActions(actions, {
-      edit: open,
-      apply: applyHtmlEdit,
-      cancel: cancelHtmlEdit,
-    }, editing);
-    bar.append(actions);
-    block.append(bar, title, zone);
-    return block;
+    form.classList.add('tepuy-index-form');
+    form.addEventListener('input', () => {
+      setIndexDraft(readIndexForm(form));
+    });
+    return form;
+  }
+
+  /**
+   * Updates the fixed Apply/Cancel bar for index metadata.
+   * @returns {void}
+   */
+  function paintIndexActions() {
+    if (!indexActions) {
+      return;
+    }
+    const dirty = draftKind() === 'index' && hasDraft();
+    indexActions.hidden = false;
+    indexActions.classList.toggle('is-active', dirty);
+    for (const button of indexActions.querySelectorAll('button')) {
+      button.disabled = !dirty;
+    }
   }
 
   /**
@@ -716,49 +815,86 @@ export function renderCanvas(mode) {
   }
 
   /**
+   * Publishes the active control path on the Edy breadcrumb bar.
    * @returns {void}
    */
+  /**
+   * @param {import('../core/parser.js').Node|null} node Content node.
+   * @returns {string|undefined} Catalog icon for the node.
+   */
+  function crumbIcon(node) {
+    if (!node) {
+      return undefined;
+    }
+    for (const control of matchableControls(999)) {
+      if (control.match(node)) {
+        return control.icon;
+      }
+    }
+    return getControl('richtext')?.icon;
+  }
+
   function paintCrumbs() {
-    crumbs.replaceChildren();
+    /** @type {{id: string, label: string, icon?: string, onSelect: Function}[]} */
+    const items = [];
     if (mode === 'index') {
-      const label = document.createElement('span');
-      label.textContent = 'index.html';
-      crumbs.append(label);
+      items.push({
+        id: 'index',
+        label: t('canvas.root.index'),
+        onSelect() {},
+      });
+    }
+    else {
+      items.push({
+        id: 'content',
+        label: t('canvas.root.content'),
+        icon: 'file',
+        onSelect: () => selectNode(null),
+      });
+      const path = currentSelectionPath() || [];
+      const walked = [];
+      for (const index of path) {
+        walked.push(index);
+        const target = [...walked];
+        const node = nodeAt(currentDocument(), target);
+        items.push({
+          id: target.join('.'),
+          label: nodeName(node),
+          icon: crumbIcon(node),
+          onSelect: () => selectNode({ path: target }),
+        });
+      }
+    }
+    const signature = items.map((item) => `${item.id}\0${item.label}\0${item.icon || ''}`).join('\n');
+    if (signature === crumbSignature) {
       return;
     }
-    const root = document.createElement('button');
-    root.type = 'button';
-    root.textContent = 'content.html';
-    root.addEventListener('click', () => selectNode(null));
-    crumbs.append(root);
-    const path = currentSelectionPath() || [];
-    const walked = [];
-    for (const index of path) {
-      walked.push(index);
-      const target = [...walked];
-      const button = document.createElement('button');
-      button.type = 'button';
-      button.textContent = nodeName(nodeAt(currentDocument(), target));
-      button.addEventListener('click', () => selectNode({ path: target }));
-      crumbs.append(button);
-    }
+    crumbSignature = signature;
+    context.breadcrumbs.set({ type: 'view', id: viewId }, items);
   }
 
   /**
    * @param {HTMLElement} zone Region that receives TinyMCE.
-   * @param {{scope: 'node'|'settings', path?: number[], regionId?: string, name?: string}} target Open region.
+   * @param {{scope: 'node'|'metadata', path?: number[], regionId?: string, key?: string}} target Open region.
    * @returns {HTMLFormElement} Editor form.
    */
   function mountEditor(zone, target) {
-    const node = target.scope === 'node' ? nodeAt(currentDocument(), target.path) : null;
-    const region = target.scope === 'node' ? htmlRegions(node).find((item) => item.id === target.regionId) : null;
-    const modeName = target.scope === 'settings' ? 'rich' : (region?.mode || 'inline');
-    const value = target.scope === 'settings'
-      ? (currentSettings()[target.name] || '')
-      : regionHtml(node, target.regionId);
+    let modeName = 'inline';
+    let value = '';
+    if (target.scope === 'metadata') {
+      modeName = 'rich';
+      const item = listMetadataNodes(currentIndexDocument().body).find((entry) => entry.key === target.key);
+      value = item ? readMetadataNode(item.node).value || '' : '';
+    }
+    else {
+      const node = nodeAt(currentDocument(), target.path);
+      const region = htmlRegions(node).find((item) => item.id === target.regionId);
+      modeName = region?.mode || 'inline';
+      value = regionHtml(node, target.regionId);
+    }
     const form = createForm({
-      translate: (key) => editor?.translate?.(key) || key,
-      onError: (error) => editor?.reportError?.(error),
+      translate: context.translate,
+      onError: (error) => currentEditor()?.reportError?.(error),
       onSubmit: () => {},
       fields: [{
         name: 'html',
@@ -785,6 +921,10 @@ export function renderCanvas(mode) {
   function draw() {
     const focus = htmlFocusTarget();
     const key = focus ? focusKey(focus) : '';
+    if (mode === 'index' && indexForm?.isConnected && draftKind() === 'index') {
+      paintIndexActions();
+      return;
+    }
     if (drag || (editorForm?.isConnected && key && key === editorKey)) {
       paintChrome();
       return;
@@ -793,11 +933,16 @@ export function renderCanvas(mode) {
     editorForm?.dispose?.();
     editorForm = null;
     editorKey = '';
-    scroller.replaceChildren();
     if (mode === 'index') {
-      scroller.append(settingsBlock('intro'), settingsBlock('objective'), lockedPlay());
+      indexForm?.dispose?.();
+      indexForm = null;
+      scroller.replaceChildren();
+      indexForm = renderIndexForm();
+      scroller.append(indexForm, lockedPlay());
+      paintIndexActions();
     }
     else {
+      scroller.replaceChildren();
       const root = currentDocument();
       const menu = renderMainMenu();
       if (menu) {
@@ -812,15 +957,15 @@ export function renderCanvas(mode) {
       else {
         scroller.append(slotButton([]));
       }
-    }
-    paintCrumbs();
-    if (key) {
-      const zone = scroller.querySelector(`[data-html-key="${CSS.escape(key)}"]`);
-      if (zone) {
-        editorForm = mountEditor(zone, focus);
-        editorKey = key;
+      if (key) {
+        const zone = scroller.querySelector(`[data-html-key="${CSS.escape(key)}"]`);
+        if (zone) {
+          editorForm = mountEditor(zone, focus);
+          editorKey = key;
+        }
       }
     }
+    paintCrumbs();
     scroller.scrollTop = scroll;
   }
 
@@ -841,11 +986,12 @@ export function renderCanvas(mode) {
     }
     handle.setPointerCapture?.(event.pointerId);
   });
+
   section.addEventListener('pointermove', (event) => {
     if (!drag || event.pointerId !== drag.pointerId) {
       return;
     }
-    const root = editor?.shadow;
+    const root = currentEditor()?.shadow;
     const hits = typeof root?.elementsFromPoint === 'function'
       ? root.elementsFromPoint(event.clientX, event.clientY)
       : [root?.elementFromPoint?.(event.clientX, event.clientY)];
@@ -870,6 +1016,7 @@ export function renderCanvas(mode) {
     drop.classList.add('is-drop');
     drag.drop = { parentPath, index: Number(drop.dataset.dropIndex) };
   });
+
   section.addEventListener('pointerup', (event) => {
     if (!drag || event.pointerId !== drag.pointerId) {
       return;
@@ -924,6 +1071,18 @@ export function renderCanvas(mode) {
       unsubscribe();
       editorForm?.dispose?.();
       editorForm = null;
+      indexForm?.dispose?.();
+      indexForm = null;
+      crumbSignature = '';
+      try {
+        context.breadcrumbs.clear({ type: 'view', id: viewId });
+      }
+      catch (error) {
+        // View removal during extension teardown already drops the path, and clear then throws.
+        if (!/disposed/i.test(String(error?.message || error))) {
+          throw error;
+        }
+      }
     },
   };
 }

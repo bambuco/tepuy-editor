@@ -15,6 +15,8 @@ import { readPackageSettings, readPackageTheme, serializePackage } from '../src/
 import { parseContentHtml } from '../src/core/parser.js';
 import { SAMPLE_CONTENT } from '../src/sample-content.js';
 
+globalThis.DOMParser = DOMParser;
+
 const root = fileURLToPath(new URL('..', import.meta.url));
 
 test('package store rejects traversal, conflicts, and log leakage', () => {
@@ -25,14 +27,16 @@ test('package store rejects traversal, conflicts, and log leakage', () => {
 test('saved package keeps its theme and leaves the log outside the document', () => {
   const main = parseContentHtml(SAMPLE_CONTENT, DOMParser);
   const settings = readPackageSettings(SAMPLE_CONTENT, DOMParser);
-  const saved = serializePackage(main, settings, { themeId: 'rutatic', themeVersion: '1.0.0', format: '2.0' });
+  const saved = serializePackage(main, settings, { themeId: 'rutatic', themeVersion: '1.0.0', format: '2.0' }, DOMParser);
   assert.match(saved, /name="tepuy-theme" content="rutatic@1.0.0"/);
+  assert.match(saved, /nav class="globals"/);
   assert.equal(readPackageTheme(saved, DOMParser), 'rutatic');
-  assert.equal(serializePackage(main, settings).includes('tepuy-theme'), false);
+  assert.equal(serializePackage(main, settings, {}, DOMParser).includes('tepuy-theme'), false);
   const again = serializePackage(
     parseContentHtml(saved, DOMParser),
     readPackageSettings(saved, DOMParser),
     { themeId: 'rutatic', themeVersion: '1.0.0', format: '2.0' },
+    DOMParser,
   );
   assert.equal(again, saved);
   assert.equal(saved.includes('secret-log-line'), false);

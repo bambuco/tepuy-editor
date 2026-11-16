@@ -31,6 +31,8 @@ import { buildPreviewHtml } from '../src/core/preview.js';
 import { serializeContent } from '../src/core/serializer.js';
 import { SAMPLE_CONTENT } from '../src/sample-content.js';
 
+globalThis.DOMParser = DOMParser;
+
 /**
  * @param {import('../src/core/parser.js').Node} node Control node.
  * @returns {import('../src/core/parser.js').Node} The same control after a parse.
@@ -96,14 +98,15 @@ test('duplicate assigns a new page id and delete removes the copy', () => {
 test('opening and saving package settings is an empty diff', () => {
   const main = parseContentHtml(SAMPLE_CONTENT, DOMParser);
   const settings = readPackageSettings(SAMPLE_CONTENT, DOMParser);
-  const saved = serializePackage(main, settings);
-  const again = serializePackage(parseContentHtml(saved, DOMParser), readPackageSettings(saved, DOMParser));
+  const saved = serializePackage(main, settings, {}, DOMParser);
+  const again = serializePackage(parseContentHtml(saved, DOMParser), readPackageSettings(saved, DOMParser), {}, DOMParser);
   assert.equal(again, saved);
-  assert.match(saved, /id="play_scorm"/);
+  assert.doesNotMatch(saved, /header class="tpy-presentation"/);
+  assert.doesNotMatch(saved, /id="play_scorm"/);
   assert.match(saved, /data-global="library"/);
   assert.match(saved, /data-global="credits"/);
-  const withSize = packageSettings({ ...settings, displayWindow: 'top', windowWidth: '100', windowHeight: '100' });
-  assert.match(serializePackage(main, withSize), /data-window-width="100"/);
+  assert.match(saved, /id="tpy-measuring_progress"/);
+  assert.match(saved, /nav class="globals"/);
   assert.equal(packageSettings({ approveLimit: 'abc' }, true), null);
 });
 
@@ -152,37 +155,42 @@ test('html regions keep sanitized markup through a round-trip', () => {
   assert.match(regionHtml(paragraph, 'body'), /Hola/);
   assert.match(regionHtml(paragraph, 'body'), /<strong>sí<\/strong>/);
   assert.equal(htmlFragment('<a href="javascript:alert(1)">x</a><a href="https://ejemplo.test">y</a>', 'inline', DOMParser), 'x<a href="https://ejemplo.test">y</a>');
-  const settings = readPackageSettings(SAMPLE_CONTENT, DOMParser);
-  const rich = { ...settings, intro: '<p>Hola</p><script>bad</script>', objective: '<ul><li>Uno</li></ul>' };
-  const saved = serializePackage(parseContentHtml(SAMPLE_CONTENT, DOMParser), rich, {}, DOMParser);
-  assert.match(saved, /<section class="tpy-intro"><p>Hola<\/p><\/section>/);
-  assert.doesNotMatch(saved, /script/);
-  assert.match(saved, /<ul><li>Uno<\/li><\/ul>/);
-  const reread = readPackageSettings(saved, DOMParser);
-  assert.equal(serializePackage(parseContentHtml(saved, DOMParser), reread, {}, DOMParser), saved);
+  assert.equal(htmlFragment('<p>Hola</p><script>bad</script>', 'rich', DOMParser), '<p>Hola</p>');
 });
 
 test('the preview shows layout, citations, device visibility, and the start button', () => {
   const root = parseContentHtml(SAMPLE_CONTENT, DOMParser);
   const reference = createControlNode('reference-image', { ids: new Set(), root });
-  const html = buildPreviewHtml({
-    html: '<main></main>',
-    settings: { menu: 'pills', progress: 'circle', pagination: 'true', lang: 'es', autoload: 'true', title: 'Curso' },
-    pages: [{ id: 'pag-introduccion', title: 'Introducción' }],
+  const settings = {
+    menu: 'pills',
+    progress: 'circle',
+    pagination: 'true',
+    lang: 'es',
+    autoload: 'true',
+    title: 'Curso',
+  };
+  const contentHtml = serializePackage(root, settings, {
+    themeId: 'base',
     references: collectReferences(reference),
+  }, DOMParser);
+  const html = buildPreviewHtml({
+    contentHtml,
+    settings,
     view: 'content',
     mobile: false,
   });
   assert.match(html, /menu-pills/);
   assert.match(html, /data-type="circle"/);
   assert.match(html, /id="tpy-auto_citation"/);
+  assert.match(html, /id="tpy-measuring_progress"/);
+  assert.match(html, /nav class="globals"/);
   assert.match(html, /Descripción del recurso/);
   assert.match(html, /onlymobile \{ display: none/);
   const presentation = buildPreviewHtml({
-    html: '',
     settings: { title: 'Curso', autoload: 'true' },
     view: 'presentation',
     autoloadNote: 'En ejecución esta página se omite.',
+    indexHtml: '<!DOCTYPE html><html><body><div id="content"></div><div id="play_scorm"></div></body></html>',
   });
   assert.match(presentation, /id="play_scorm"/);
   assert.match(presentation, /En ejecución esta página se omite/);

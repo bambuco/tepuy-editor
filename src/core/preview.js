@@ -5,9 +5,6 @@
  * @license http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-import { htmlFragment } from './html.js';
-import { serializeContent } from './serializer.js';
-
 /**
  * @param {string} value CSS value.
  * @returns {boolean} Whether the value can be placed in a stylesheet.
@@ -29,93 +26,54 @@ function escapeHtml(value) {
 }
 
 /**
- * @param {import('./parser.js').Node|null|undefined} mainMenu Persisted main menu HTML tree.
- * @param {Array<{id: string, title: string}>} pages Fallback pages when the menu is empty.
- * @param {Object<string, string>} settings Package settings.
- * @returns {string} Menu, progress, and pagination chrome.
+ * @param {string} html Full document or body fragment.
+ * @returns {string} Inner body HTML.
  */
-function layoutChrome(mainMenu, pages, settings) {
-  const menu = ['default', 'pills', 'tabs', 'horizontal', 'vertical'].includes(settings.menu) ? settings.menu : 'default';
-  const progress = ['default', 'circle', 'horizontal', 'vertical'].includes(settings.progress) ? settings.progress : 'default';
-  let navHtml = mainMenu ? serializeContent(mainMenu).trim() : '';
-  if (navHtml) {
-    const classes = `main menu-${menu}`;
-    if (/\bclass="/i.test(navHtml)) {
-      navHtml = navHtml.replace(/\bclass="([^"]*)"/i, (_, current) => {
-        const tokens = new Set(`${current} ${classes}`.split(/\s+/).filter(Boolean));
-        return `class="${[...tokens].join(' ')}"`;
-      });
-    }
-    else {
-      navHtml = navHtml.replace(/^<nav\b/i, `<nav class="${classes}"`);
-    }
-    if (!/\bdata-menu=/.test(navHtml)) {
-      navHtml = navHtml.replace(/^<nav\b/i, `<nav data-menu="${menu}"`);
-    }
+function bodyFromDocument(html) {
+  if (!html) {
+    return '';
   }
-  else {
-    const links = pages.map((page) => `<a data-page="${escapeHtml(page.id)}" href="#${escapeHtml(page.id)}">${escapeHtml(page.title)}</a>`).join('');
-    navHtml = `<nav class="main menu-${menu}" data-menu="${menu}">${links}</nav>`;
-  }
-  const pagination = settings.pagination === 'false'
-    ? ''
-    : `<div id="tpy-page_number">1 / ${pages.length}</div>`;
-  return `${navHtml}
-<div id="tpy-measuring_progress" class="measuring-progress" data-type="${progress}">0%</div>
-${pagination}`;
-}
-
-/**
- * @param {Array<{type: string, key: string, text: string, full: string}>} references Local references.
- * @returns {string} Automatic citation list grouped by type.
- */
-function citationHtml(references) {
-  const types = [...new Set(references.map((item) => item.type))];
-  const groups = types.map((type) => {
-    const entries = references.filter((item) => item.type === type).map((item) => {
-      const full = item.full ? `<br>${escapeHtml(item.full)}` : '';
-      return `<p>${escapeHtml(item.key)} ${escapeHtml(item.text)}${full}</p>`;
-    }).join('');
-    return `<section data-ref-type="${escapeHtml(type)}"><h2>${escapeHtml(type)}</h2>${entries}</section>`;
-  }).join('');
-  return `<div id="tpy-auto_citation">${groups}</div>`;
+  const match = html.match(/<body[^>]*>([\s\S]*)<\/body>/i);
+  return match ? match[1].trim() : html;
 }
 
 /**
  * Builds a static preview document. It does not include editor scripts.
- * @param {{html: string, variables?: Object<string, string>, mobile?: boolean, settings?: Object<string, string>, pages?: Array, mainMenu?: import('./parser.js').Node|null, references?: Array, view?: string, autoloadNote?: string}} options Applied content and theme.
+ * @param {{html?: string, variables?: Object<string, string>, mobile?: boolean, settings?: Object<string, string>, view?: string, autoloadNote?: string, indexHtml?: string, contentHtml?: string}} options Applied content and theme.
  * @returns {string} HTML document for a sandboxed iframe.
  */
 export function buildPreviewHtml({
-  html,
+  html = '',
   variables = {},
   mobile = false,
   settings = {},
-  pages = [],
-  mainMenu = null,
-  references = [],
   view = 'content',
   autoloadNote = '',
+  indexHtml = '',
+  contentHtml = '',
 }) {
   const custom = Object.entries(variables)
     .filter(([, value]) => safeCssValue(String(value)))
     .map(([name, value]) => `${name}: ${value};`)
     .join('');
-  const body = view === 'presentation'
-    ? `<header class="tpy-presentation">
-  <h1>${settings.level ? `<span class="level">${escapeHtml(settings.level)}</span> ` : ''}${escapeHtml(settings.title || '')}</h1>
-  <h2>${escapeHtml(settings.activityTitle || '')}</h2>
-  <section class="tpy-intro">${htmlFragment(settings.intro || '', 'rich')}</section>
-  <section class="tpy-objective">${htmlFragment(settings.objective || '', 'rich')}</section>
-  <p class="tpy-duration">${escapeHtml(settings.duration || '')}</p>
-  ${settings.autoload === 'true' && autoloadNote ? `<p>${escapeHtml(autoloadNote)}</p>` : ''}
-</header>
-<div id="play_scorm"><button type="button">Iniciar</button></div>`
-    : `${layoutChrome(mainMenu, pages, settings)}
-${html}
-${citationHtml(references)}
-<div id="tpy-pg_credits" data-global="credits">${escapeHtml(settings.credits || '')}</div>
-<div id="tpy-pg_bibliography" data-global="library">${escapeHtml(settings.library || '')}</div>`;
+  let body;
+  if (view === 'presentation') {
+    if (indexHtml) {
+      body = bodyFromDocument(indexHtml);
+      if (settings.autoload === 'true' && autoloadNote) {
+        body += `<p>${escapeHtml(autoloadNote)}</p>`;
+      }
+    }
+    else {
+      body = `<div id="content"></div><div id="play_scorm"><button type="button">Iniciar</button></div>`;
+    }
+  }
+  else if (contentHtml) {
+    body = bodyFromDocument(contentHtml);
+  }
+  else {
+    body = bodyFromDocument(html) || html;
+  }
   return `<!DOCTYPE html>
 <html lang="${escapeHtml(settings.lang || 'es')}">
 <head>

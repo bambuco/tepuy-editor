@@ -8,48 +8,93 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { DOMParser } from 'linkedom';
-import { readPackageSettings, serializePackage } from '../src/core/package.js';
+import { buildPreviewHtml } from '../src/core/preview.js';
+import { readMetadata, serializeIndexDocument } from '../src/metadata/index-document.js';
 import {
   applyDraft,
   cancelDraft,
-  currentDocument,
+  currentIndexDocument,
   currentInsertionPath,
-  currentSettings,
-  focusHtml,
   hasDraft,
-  htmlFocusTarget,
+  indexDraft,
   insertControl,
-  setHtmlDraft,
+  setIndexDraft,
+  subscribePreview,
 } from '../src/ui/session.js';
 
 globalThis.DOMParser = DOMParser;
 
-test('an html draft stays out of the document until apply', () => {
-  const before = serializePackage(currentDocument(), currentSettings(), {}, DOMParser);
-  setHtmlDraft({ scope: 'settings', name: 'intro' }, '<p>Nuevo</p><script>bad</script>');
+test('an index metadata draft stays out of the document until apply', () => {
+  const before = serializeIndexDocument(currentIndexDocument());
+  const applied = readMetadata(currentIndexDocument().body);
+  setIndexDraft({
+    ...applied,
+    description: { value: '<p>Nuevo</p>' },
+    title: { value: 'Curso nuevo' },
+  });
   assert.equal(hasDraft(), true);
-  assert.equal(serializePackage(currentDocument(), currentSettings(), {}, DOMParser), before);
+  assert.ok(indexDraft());
+  assert.equal(serializeIndexDocument(currentIndexDocument()), before);
   assert.equal(insertControl('paragraph'), 'pending');
   assert.equal(applyDraft(), 'applied');
   assert.equal(hasDraft(), false);
-  const saved = serializePackage(currentDocument(), currentSettings(), {}, DOMParser);
-  assert.match(saved, /<p>Nuevo<\/p>/);
-  assert.doesNotMatch(saved, /script/);
-  setHtmlDraft({ scope: 'settings', name: 'intro' }, '<p>Otro</p>');
+  const saved = serializeIndexDocument(currentIndexDocument());
+  assert.match(saved, /data-key="description"/);
+  assert.match(saved, /<p>\s*Nuevo\s*<\/p>/);
+  assert.match(saved, /data-key="title"/);
+  assert.match(saved, /Curso nuevo/);
+  setIndexDraft({
+    ...readMetadata(currentIndexDocument().body),
+    description: { value: '<p>Otro</p>' },
+  });
   assert.equal(cancelDraft(), true);
-  assert.match(serializePackage(currentDocument(), currentSettings(), {}, DOMParser), /<p>Nuevo<\/p>/);
-  assert.doesNotMatch(readPackageSettings(saved, DOMParser).intro, /script/);
+  assert.match(serializeIndexDocument(currentIndexDocument()), /<p>\s*Nuevo\s*<\/p>/);
   assert.ok(currentInsertionPath());
 });
 
-test('apply and cancel close an open html region without a draft', () => {
-  assert.equal(focusHtml({ scope: 'settings', name: 'objective' }), 'focused');
-  assert.equal(htmlFocusTarget()?.name, 'objective');
+test('cancel clears an empty index focus cycle', () => {
   assert.equal(hasDraft(), false);
-  assert.equal(applyDraft(), 'applied');
-  assert.equal(htmlFocusTarget(), null);
-  assert.equal(focusHtml({ scope: 'settings', name: 'intro' }), 'focused');
-  assert.equal(cancelDraft(), true);
-  assert.equal(htmlFocusTarget(), null);
   assert.equal(cancelDraft(), false);
+  const applied = readMetadata(currentIndexDocument().body);
+  setIndexDraft({
+    ...applied,
+    topic: { value: 'Temporal' },
+  });
+  assert.equal(hasDraft(), true);
+  assert.equal(cancelDraft(), true);
+  assert.equal(hasDraft(), false);
+  assert.equal(indexDraft(), null);
+});
+
+test('applied index metadata appears in the presentation preview body', () => {
+  const applied = readMetadata(currentIndexDocument().body);
+  setIndexDraft({
+    ...applied,
+    title: { value: 'Vista previa index' },
+  });
+  assert.equal(applyDraft(), 'applied');
+  const indexHtml = serializeIndexDocument(currentIndexDocument());
+  const preview = buildPreviewHtml({
+    view: 'presentation',
+    indexHtml,
+    settings: { lang: 'es' },
+  });
+  assert.match(preview, /Vista previa index/);
+  assert.match(preview, /data-key="title"/);
+});
+
+test('preview notify fires on apply, not on index draft typing', () => {
+  let hits = 0;
+  const stop = subscribePreview(() => {
+    hits += 1;
+  });
+  const applied = readMetadata(currentIndexDocument().body);
+  setIndexDraft({
+    ...applied,
+    title: { value: 'Borrador sin preview' },
+  });
+  assert.equal(hits, 0);
+  assert.equal(applyDraft(), 'applied');
+  assert.equal(hits, 1);
+  stop();
 });

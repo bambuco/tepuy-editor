@@ -8,77 +8,8 @@
 import { nodeAt } from '../core/edit.js';
 import { htmlFragment, sanitizeHtml, serializeFragment } from '../core/html.js';
 import { slugify, uniqueId } from '../core/ids.js';
-
-/** @type {Record<string, string>} Presentation controls edited in package settings. */
-export const PRESENTATION_FIELDS = {
-  intro: 'intro',
-  objective: 'objective',
-  duration: 'duration',
-  title: 'title',
-};
-
-const BOX_CLASS = {
-  important: 'important',
-  example: 'example',
-  note: 'note',
-  'link-box': 'link',
-  connection: 'connection',
-  'activity-box': 'activity',
-};
-
-const BOX_LABEL = {
-  important: 'Importante',
-  example: 'Ejemplo',
-  note: 'Nota',
-  'link-box': 'Enlace',
-  connection: 'Conexión',
-  'activity-box': 'Actividad de aprendizaje',
-};
-
-const INSTRUCTION_TYPE = {
-  'instruction-info': 'info',
-  'instruction-danger': 'danger',
-  'instruction-warning': 'alert',
-  'instruction-none': 'none',
-  'instruction-default': '',
-};
-
-const REFERENCE_TYPE = {
-  'reference-image': 'image',
-  'reference-video': 'video',
-  'reference-audio': 'audio',
-  'reference-table': 'table',
-  'reference-web': 'web',
-  'reference-book': 'paper',
-  'reference-general': '',
-};
-
-/**
- * @param {string} tag Element name.
- * @param {Object<string, string>} attrs Attributes.
- * @param {import('../core/parser.js').Node[]} children Child nodes.
- * @param {string} [type] Editor node type.
- * @returns {import('../core/parser.js').Node} Content node.
- */
-function el(tag, attrs, children, type = 'element') {
-  return { type, tag, attrs: { ...attrs }, children };
-}
-
-/**
- * @param {string} value Visible text.
- * @returns {import('../core/parser.js').Node} Text node.
- */
-function text(value) {
-  return { type: 'text', text: value };
-}
-
-/**
- * @param {import('../core/parser.js').Node} node Content node.
- * @returns {Set<string>} Class tokens.
- */
-function classSet(node) {
-  return new Set((node?.attrs?.class || '').split(/\s+/).filter(Boolean));
-}
+import { controlPriority, getControl, matchableControls } from './registry.js';
+import { GLOBAL_PAGES_ID, classSet, text } from './shared.js';
 
 /**
  * @param {import('../core/parser.js').Node|null} node Content node.
@@ -192,14 +123,6 @@ export function collectIds(root) {
 }
 
 /**
- * @param {import('../core/parser.js').Node} root Content tree.
- * @returns {string} Identifier of the first page.
- */
-function firstPageId(root) {
-  return root.children?.find((node) => node.type === 'page')?.attrs?.id || '';
-}
-
-/**
  * @param {string} title Page title.
  * @param {Set<string>} ids Identifiers already used.
  * @param {string} [currentId] Id of the page being edited (excluded from collisions).
@@ -228,118 +151,9 @@ export function isAutoPageId(pageId, title) {
  * @param {{ids: Set<string>, root: import('../core/parser.js').Node, pageId?: string, pageTitle?: string}} context Package identifiers.
  * @returns {import('../core/parser.js').Node|null} New control, or null when this phase does not insert it.
  */
-export function createControlNode(id, { ids, root, pageId, pageTitle }) {
-  if (id === 'page') {
-    const title = pageTitle || 'Página';
-    const nextId = pageId && validId(pageId) && !ids.has(pageId)
-      ? pageId
-      : uniqueId('pag', title, ids);
-    return el('section', { id: nextId, ptitle: title }, [
-      el('div', { class: 'subpage', 'data-title': 'Inicio' }, [
-        el('h3', {}, [text('Inicio')], 'heading'),
-      ], 'subpage'),
-    ], 'page');
-  }
-  if (id === 'subpage') {
-    return el('div', { class: 'subpage', 'data-title': 'Subpágina' }, [
-      el('h3', {}, [text('Subpágina')], 'heading'),
-    ], 'subpage');
-  }
-  if (id === 'paragraph') {
-    return el('p', {}, [text('Párrafo')], 'paragraph');
-  }
-  if (/^heading-[2-5]$/.test(id)) {
-    return el(`h${id.slice(-1)}`, {}, [text('Título')], 'heading');
-  }
-  if (id === 'list') {
-    return el('ul', {}, [el('li', {}, [text('Elemento')])]);
-  }
-  if (id === 'internal-link') {
-    return el('a', { 'data-page': firstPageId(root) }, [text('Enlace')], 'link');
-  }
-  if (id === 'quote') {
-    return el('cite', {}, [text('Cita')]);
-  }
-  if (id === 'bold') {
-    return el('strong', {}, [text('Texto')]);
-  }
-  if (id === 'italic') {
-    return el('em', {}, [text('Texto')]);
-  }
-  if (id === 'image') {
-    return el('figure', { class: 'box_media' }, [
-      el('img', { alt: 'Imagen', src: 'content/imagen.png' }, [], 'image'),
-      el('figcaption', {}, [text('Descripción')]),
-    ]);
-  }
-  if (id === 'audio') {
-    return el('audio', { controls: '', src: 'content/audio.mp3' });
-  }
-  if (id === 'video') {
-    return el('video', { controls: '', src: 'content/video.mp4' });
-  }
-  if (id === 'table') {
-    return el('table', { class: 'datatable' }, [
-      el('thead', {}, [el('tr', {}, [el('th', {}, [text('Columna')])])]),
-      el('tbody', {}, [el('tr', {}, [el('td', {}, [text('Dato')])])]),
-    ]);
-  }
-  if (id === 'code') {
-    return el('pre', {}, [text('Código')]);
-  }
-  if (id === 'mobile-only') {
-    return el('span', { class: 'onlymobile' }, [text('Solo móvil')]);
-  }
-  if (id === 'desktop-only') {
-    return el('span', { class: 'notmobile' }, [text('Solo escritorio')]);
-  }
-  if (BOX_CLASS[id]) {
-    return el('div', { class: `box-text ${BOX_CLASS[id]}`, label: BOX_LABEL[id] }, [
-      el('p', {}, [text('Texto')], 'paragraph'),
-    ], 'box');
-  }
-  if (id in INSTRUCTION_TYPE) {
-    const attrs = { class: 'instruction' };
-    if (INSTRUCTION_TYPE[id]) {
-      attrs.type = INSTRUCTION_TYPE[id];
-    }
-    return el('div', attrs, [text('Instrucción')]);
-  }
-  if (id === 'tabs') {
-    return el('div', { class: 'horizontal-menu' }, [tabPair('Pestaña 1'), tabPair('Pestaña 2')]);
-  }
-  if (id === 'quiz') {
-    const actId = uniqueId('quiz', 'Cuestionario', ids);
-    return el('div', { class: 'jpit-activities-quiz', 'data-act-id': actId, 'data-act-title': 'Cuestionario' }, [
-      el('question', { type: 'simplechoice' }, [
-        el('description', {}, [el('p', {}, [text('Pregunta')], 'paragraph')]),
-        el('ul', {}, [
-          el('li', { 'data-response': 'true' }, [text('Correcta')]),
-          el('li', {}, [text('Otra respuesta')]),
-        ]),
-        el('feedback', {}, [el('correct', {}, [text('Correcto')])]),
-      ]),
-    ]);
-  }
-  if (id in REFERENCE_TYPE) {
-    const attrs = { class: 'about', 'data-key': '[1]' };
-    if (REFERENCE_TYPE[id]) {
-      attrs['data-type'] = REFERENCE_TYPE[id];
-    }
-    return el('div', attrs, [text('Descripción del recurso')]);
-  }
-  return null;
-}
-
-/**
- * @param {string} title Tab title.
- * @returns {import('../core/parser.js').Node} One tab without an internal id.
- */
-function tabPair(title) {
-  return el('dl', {}, [
-    el('dt', {}, [text(title)]),
-    el('dd', {}, [el('p', {}, [text('Contenido')], 'paragraph')]),
-  ]);
+export function createControlNode(id, context) {
+  const key = id === 'paragraph' ? 'richtext' : id;
+  return getControl(key)?.create?.(context) ?? null;
 }
 
 /**
@@ -382,11 +196,39 @@ export function hasSlot(node) {
   if (node.tag === 'main' || node.tag === 'dd') {
     return true;
   }
+  if (node.attrs?.id === GLOBAL_PAGES_ID) {
+    return true;
+  }
   if (node.type === 'page' || node.type === 'subpage') {
     return true;
   }
+  if (classSet(node).has('tepuy-modal') || classSet(node).has('tepuy-modal__body')) {
+    return true;
+  }
   const kind = controlKind(node);
-  return kind === 'mobile' || kind === 'desktop';
+  return kind === 'mobile' || kind === 'desktop' || kind === 'tabs';
+}
+
+/**
+ * @param {import('../core/parser.js').Node|null} node Content node.
+ * @returns {number} Priority of the matching control, or 999 when unmatched.
+ */
+function nodeControlPriority(node) {
+  if (!node) {
+    return 999;
+  }
+  if (node.tag === 'main') {
+    return 900;
+  }
+  if (node.attrs?.id === GLOBAL_PAGES_ID) {
+    return 799;
+  }
+  for (const control of matchableControls(999)) {
+    if (control.match(node)) {
+      return control.priority;
+    }
+  }
+  return getControl('richtext')?.priority ?? 10;
 }
 
 /**
@@ -399,8 +241,16 @@ export function slotAccepts(parent, id) {
   if (!parent || !role || !hasSlot(parent)) {
     return false;
   }
+  const childPriority = controlPriority(id);
+  const parentPriority = nodeControlPriority(parent);
+  if (childPriority > parentPriority) {
+    return false;
+  }
   if (parent.tag === 'main') {
     return role === 'page';
+  }
+  if (parent.attrs?.id === GLOBAL_PAGES_ID) {
+    return role === 'content' && childPriority <= 799;
   }
   if (parent.type === 'page') {
     return role === 'subpage' || role === 'content';

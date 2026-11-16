@@ -1,14 +1,14 @@
 /**
- * @file Package settings for content.html, the presentation page, and globals.
+ * @file Package settings for content.html and globals.
  *
  * @copyright 2026 David Herney - BambuCo
  * @license http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-import { htmlFragment } from './html.js';
-import { emptyMainMenu, ensureMainMenuFromPages, extractMainMenuItems } from './menu.js';
-import { parseContentHtml, parseMainMenuHtml } from './parser.js';
+import { emptyMainMenu, ensureMainMenuFromPages } from './menu.js';
+import { parseContentHtml, parseGlobalPagesHtml, parseMainMenuHtml } from './parser.js';
 import { serializeContent } from './serializer.js';
+import { themeContentTemplate } from './themes.js';
 
 /**
  * @param {import('./parser.js').Node} main Content tree.
@@ -34,15 +34,6 @@ export const PACKAGE_DEFAULTS = {
   menu: 'default',
   progress: 'default',
   pagination: 'true',
-  autoload: 'false',
-  displayWindow: 'top',
-  windowWidth: '',
-  windowHeight: '',
-  level: '',
-  activityTitle: '',
-  intro: '',
-  objective: '',
-  duration: '',
   credits: '',
   library: '',
 };
@@ -54,8 +45,6 @@ const ENUMS = {
   menu: ['default', 'pills', 'tabs', 'horizontal', 'vertical'],
   progress: ['default', 'circle', 'horizontal', 'vertical'],
   pagination: ['true', 'false'],
-  autoload: ['true', 'false'],
-  displayWindow: ['top', 'popup', 'modal'],
 };
 
 /**
@@ -79,7 +68,7 @@ function wholeNumber(value) {
 }
 
 /**
- * Fills and checks package settings.
+ * Fills and checks package settings (runtime / content.html).
  * @param {Object<string, string>} [input] Partial settings.
  * @param {boolean} [strict] Reject invalid user input instead of using defaults.
  * @returns {Object<string, string>|null} Complete settings, or null when strict input is invalid.
@@ -126,23 +115,14 @@ export function packageSettings(input = {}, strict = false) {
     }
     settings[name] = number;
   }
-  for (const name of ['windowWidth', 'windowHeight']) {
-    if (source[name] === undefined || source[name] === '') {
-      settings[name] = '';
-      continue;
-    }
-    const number = wholeNumber(source[name]);
-    if (!number) {
-      if (strict) {
-        return null;
-      }
-      settings[name] = '';
-      continue;
-    }
-    settings[name] = number;
-  }
-  for (const name of ['title', 'level', 'activityTitle', 'intro', 'objective', 'duration', 'credits', 'library']) {
+  for (const name of ['title', 'credits', 'library']) {
     settings[name] = source[name] === undefined ? PACKAGE_DEFAULTS[name] : String(source[name]);
+  }
+  // Preserve legacy keys when present so migration can still read them once.
+  for (const name of ['intro', 'objective', 'duration', 'level', 'activityTitle', 'autoload', 'displayWindow', 'windowWidth', 'windowHeight']) {
+    if (source[name] !== undefined) {
+      settings[name] = String(source[name]);
+    }
   }
   return settings;
 }
@@ -181,29 +161,13 @@ export function settingsFields(settings) {
     settingField('menu', values.menu, ['default', 'pills', 'tabs', 'horizontal', 'vertical']),
     settingField('progress', values.progress, ['default', 'circle', 'horizontal', 'vertical']),
     settingField('pagination', values.pagination, ['true', 'false']),
-    settingField('duration', values.duration),
-    settingField('level', values.level),
-    settingField('activityTitle', values.activityTitle),
-    settingField('autoload', values.autoload, ['false', 'true']),
-    settingField('displayWindow', values.displayWindow, ['top', 'popup', 'modal']),
-    settingField('windowWidth', values.windowWidth),
-    settingField('windowHeight', values.windowHeight),
     settingField('credits', values.credits),
     settingField('library', values.library),
   ];
 }
 
 /**
- * @param {Element|null|undefined} element Presentation section.
- * @param {typeof DOMParser} Parser DOM parser constructor.
- * @returns {string} Sanitized inner HTML.
- */
-function sectionHtml(element, Parser) {
-  return htmlFragment(element?.innerHTML || '', 'rich', Parser);
-}
-
-/**
- * @param {string} html Package document.
+ * @param {string} html Package document (content.html).
  * @param {typeof DOMParser} [Parser] DOM parser constructor.
  * @returns {Object<string, string>} Settings found in the document.
  */
@@ -216,9 +180,22 @@ export function readPackageSettings(html, Parser = globalThis.DOMParser) {
   const titleText = heading
     ? [...heading.childNodes].filter((node) => node.nodeType === 3).map((node) => node.textContent).join('').trim()
     : document.querySelector('title')?.textContent || '';
+  /** @type {Object<string, string>} */
+  const legacy = {};
+  if (header) {
+    legacy.autoload = header.getAttribute('data-autoload') || undefined;
+    legacy.displayWindow = header.getAttribute('data-display-window') || undefined;
+    legacy.windowWidth = header.getAttribute('data-window-width') || '';
+    legacy.windowHeight = header.getAttribute('data-window-height') || '';
+    legacy.level = level;
+    legacy.activityTitle = header.querySelector('h2')?.textContent || '';
+    legacy.intro = header.querySelector('.tpy-intro')?.innerHTML || '';
+    legacy.objective = header.querySelector('.tpy-objective')?.innerHTML || '';
+    legacy.duration = header.querySelector('.tpy-duration')?.textContent || '';
+  }
   return packageSettings({
     lang: document.documentElement.getAttribute('lang') || undefined,
-    title: titleText,
+    title: titleText || document.querySelector('title')?.textContent || undefined,
     single: document.documentElement.classList.contains('single') ? 'true' : 'false',
     displayMode: body?.getAttribute('data-display-mode') || undefined,
     approveLimit: body?.getAttribute('data-approve-limit') || undefined,
@@ -228,17 +205,9 @@ export function readPackageSettings(html, Parser = globalThis.DOMParser) {
     menu: body?.getAttribute('data-menu') || undefined,
     progress: body?.getAttribute('data-progress') || undefined,
     pagination: body?.getAttribute('data-pagination') || undefined,
-    autoload: header?.getAttribute('data-autoload') || undefined,
-    displayWindow: header?.getAttribute('data-display-window') || undefined,
-    windowWidth: header?.getAttribute('data-window-width') || '',
-    windowHeight: header?.getAttribute('data-window-height') || '',
-    level,
-    activityTitle: header?.querySelector('h2')?.textContent || '',
-    intro: sectionHtml(header?.querySelector('.tpy-intro'), Parser),
-    objective: sectionHtml(header?.querySelector('.tpy-objective'), Parser),
-    duration: header?.querySelector('.tpy-duration')?.textContent || '',
     credits: document.querySelector('[data-global="credits"]')?.textContent || '',
     library: document.querySelector('[data-global="library"]')?.textContent || '',
+    ...legacy,
   });
 }
 
@@ -254,26 +223,10 @@ export function readPackageTheme(html, Parser = globalThis.DOMParser) {
 }
 
 /**
- * @param {Object<string, string>} settings Complete settings.
- * @param {typeof DOMParser} [Parser] DOM parser constructor.
- * @returns {string} Presentation markup. The start button is always present.
+ * @returns {import('./parser.js').Node} Empty global pages container.
  */
-function presentationHtml(settings, Parser = globalThis.DOMParser) {
-  const size = ['windowWidth', 'windowHeight']
-    .filter((name) => settings[name] !== '')
-    .map((name) => ` data-${name === 'windowWidth' ? 'window-width' : 'window-height'}="${settings[name]}"`)
-    .join('');
-  const level = settings.level ? `<span class="level">${escapeHtml(settings.level)}</span> ` : '';
-  return `<header class="tpy-presentation" data-autoload="${settings.autoload}" data-display-window="${settings.displayWindow}"${size}>
-  <h1>${level}${escapeHtml(settings.title)}</h1>
-  <h2>${escapeHtml(settings.activityTitle)}</h2>
-  <section class="tpy-intro">${htmlFragment(settings.intro, 'rich', Parser)}</section>
-  <section class="tpy-objective">${htmlFragment(settings.objective, 'rich', Parser)}</section>
-  <p class="tpy-duration">${escapeHtml(settings.duration)}</p>
-</header>
-<div id="play_scorm"><button type="button">Iniciar</button></div>
-<div id="tpy-pg_credits" data-global="credits">${escapeHtml(settings.credits)}</div>
-<div id="tpy-pg_bibliography" data-global="library">${escapeHtml(settings.library)}</div>`;
+export function emptyGlobalPages() {
+  return { type: 'element', tag: 'div', attrs: { id: 'global-pages' }, children: [] };
 }
 
 /**
@@ -281,30 +234,148 @@ function presentationHtml(settings, Parser = globalThis.DOMParser) {
  * @param {string} html Package HTML.
  * @param {string} [themeId] Theme used when the menu must be bootstrapped.
  * @param {typeof DOMParser} [Parser] DOM parser constructor.
- * @returns {{main: import('./parser.js').Node, mainMenu: import('./parser.js').Node}} Content and menu trees.
+ * @returns {{main: import('./parser.js').Node, mainMenu: import('./parser.js').Node, globalPages: import('./parser.js').Node}} Content trees.
  */
 export function readPackageContent(html, themeId = 'base', Parser = globalThis.DOMParser) {
   const main = parseContentHtml(html, Parser);
   let mainMenu = parseMainMenuHtml(html, Parser) || emptyMainMenu(themeId);
   mainMenu = ensureMainMenuFromPages(mainMenu, themeId, pagesFromMain(main));
-  return { main, mainMenu };
+  const globalPages = parseGlobalPagesHtml(html, Parser) || emptyGlobalPages();
+  return { main, mainMenu, globalPages };
 }
 
 /**
- * Writes the content document and the presentation settings as stable HTML.
- * @param {import('./parser.js').Node} main Parsed main element.
- * @param {Object<string, string>} settings Package settings.
- * @param {{themeId?: string, themeVersion?: string, format?: string, mainMenu?: import('./parser.js').Node}} [meta] Theme stamp and optional main menu.
- * @param {typeof DOMParser} [Parser] DOM parser constructor.
- * @returns {string} Canonical package HTML.
+ * @param {string} menuHtml Serialized nav.main.
+ * @param {string} menuStyle Package menu style.
+ * @returns {string} Nav with menu classes and data-menu.
  */
-export function serializePackage(main, settings, meta = {}, Parser = globalThis.DOMParser) {
-  const complete = packageSettings(settings);
+function decorateMainMenu(menuHtml, menuStyle) {
+  const menu = ['default', 'pills', 'tabs', 'horizontal', 'vertical'].includes(menuStyle) ? menuStyle : 'default';
+  let navHtml = menuHtml.trim();
+  if (!navHtml) {
+    return `<nav class="main menu-${menu}" data-menu="${menu}"></nav>`;
+  }
+  const classes = `main menu-${menu}`;
+  if (/\bclass="/i.test(navHtml)) {
+    navHtml = navHtml.replace(/\bclass="([^"]*)"/i, (_, current) => {
+      const tokens = new Set(`${current} ${classes}`.split(/\s+/).filter(Boolean));
+      return `class="${[...tokens].join(' ')}"`;
+    });
+  }
+  else {
+    navHtml = navHtml.replace(/^<nav\b/i, `<nav class="${classes}"`);
+  }
+  if (/\bdata-menu=/.test(navHtml)) {
+    navHtml = navHtml.replace(/\bdata-menu="[^"]*"/i, `data-menu="${menu}"`);
+  }
+  else {
+    navHtml = navHtml.replace(/^<nav\b/i, `<nav data-menu="${menu}"`);
+  }
+  return navHtml;
+}
+
+/**
+ * @param {Document} document Target document.
+ * @param {string} selector Element to replace.
+ * @param {string} html Replacement outer HTML.
+ */
+function replaceOuter(document, selector, html) {
+  const current = document.querySelector(selector);
+  if (!current || !html) {
+    return;
+  }
+  const wrap = document.createElement('div');
+  wrap.innerHTML = html;
+  const next = wrap.firstElementChild;
+  if (next) {
+    current.replaceWith(next);
+  }
+}
+
+/**
+ * @param {Array<{type: string, key: string, text: string, full: string}>} references Local references.
+ * @returns {string} Citation groups without the outer container.
+ */
+function citationInnerHtml(references) {
+  const types = [...new Set(references.map((item) => item.type))];
+  return types.map((type) => {
+    const entries = references.filter((item) => item.type === type).map((item) => {
+      const full = item.full ? `<br>${escapeHtml(item.full)}` : '';
+      return `<p>${escapeHtml(item.key)} ${escapeHtml(item.text)}${full}</p>`;
+    }).join('');
+    return `<section data-ref-type="${escapeHtml(type)}"><h2>${escapeHtml(type)}</h2>${entries}</section>`;
+  }).join('');
+}
+
+/**
+ * Fills editable surfaces into a theme content.html shell, keeping other body regions.
+ * @param {string} shellHtml Theme or package content shell.
+ * @param {{main: import('./parser.js').Node, mainMenu?: import('./parser.js').Node, globalPages?: import('./parser.js').Node, settings?: Object<string, string>, references?: Array, themeId?: string, themeVersion?: string, format?: string}} options Surfaces and stamp.
+ * @param {typeof DOMParser} [Parser] DOM parser constructor.
+ * @returns {string} Canonical content.html.
+ */
+export function fillContentShell(shellHtml, options = {}, Parser = globalThis.DOMParser) {
+  const complete = packageSettings(options.settings || {});
+  const themeId = options.themeId;
+  const shellThemeId = themeId || 'base';
+  const themeVersion = options.themeVersion || '1.0.0';
+  const format = options.format || '2.0';
+  const main = options.main;
+  const mainMenu = options.mainMenu
+    || ensureMainMenuFromPages(emptyMainMenu(shellThemeId), shellThemeId, pagesFromMain(main));
+  const globalPages = options.globalPages || emptyGlobalPages();
+  const document = new Parser().parseFromString(shellHtml, 'text/html');
+
+  replaceOuter(document, 'nav.main', decorateMainMenu(serializeContent(mainMenu), complete.menu));
+  replaceOuter(document, '#global-pages', serializeContent(globalPages).trim());
+  replaceOuter(document, 'main', serializeContent(main).trim());
+
+  const credits = document.querySelector('#tpy-pg_credits, [data-global="credits"]');
+  if (credits) {
+    credits.textContent = complete.credits;
+  }
+  const library = document.querySelector('#tpy-pg_bibliography, [data-global="library"]');
+  if (library) {
+    library.textContent = complete.library;
+  }
+
+  const progress = document.querySelector('#tpy-measuring_progress');
+  if (progress) {
+    const tokens = new Set(`${progress.getAttribute('class') || ''} measuring-progress`.split(/\s+/).filter(Boolean));
+    progress.setAttribute('class', [...tokens].join(' '));
+    progress.setAttribute('data-type', complete.progress);
+    if (!progress.textContent.trim()) {
+      progress.textContent = '0%';
+    }
+  }
+
+  const pageNumber = document.querySelector('#tpy-page_number');
+  if (pageNumber) {
+    pageNumber.textContent = complete.pagination === 'false' ? '' : `1 / ${pagesFromMain(main).length}`;
+  }
+
+  if (options.references?.length) {
+    const citation = document.querySelector('#tpy-auto_citation');
+    if (citation) {
+      citation.innerHTML = citationInnerHtml(options.references);
+    }
+  }
+
+  const head = ['  <meta charset="utf-8">'];
+  if (themeId) {
+    head.push(`  <meta name="tepuy-theme" content="${escapeHtml(themeId)}@${escapeHtml(themeVersion)}">`);
+    head.push(`  <meta name="tepuy-version" content="${escapeHtml(format)}">`);
+  }
+  head.push(`  <title>${escapeHtml(complete.title)}</title>`);
+  for (const link of document.querySelectorAll('head link[rel="stylesheet"]')) {
+    const href = link.getAttribute('href');
+    if (href) {
+      head.push(`  <link rel="stylesheet" href="${escapeHtml(href)}">`);
+    }
+  }
+
   const single = complete.single === 'true' ? ' class="single"' : '';
-  const themeMeta = meta.themeId
-    ? `  <meta name="tepuy-theme" content="${escapeHtml(meta.themeId)}@${escapeHtml(meta.themeVersion || '1.0.0')}">\n  <meta name="tepuy-version" content="${escapeHtml(meta.format || '2.0')}">\n`
-    : '';
-  const body = [
+  const bodyAttrs = [
     ['data-activities-percentaje', complete.activitiesPercentage],
     ['data-approve-limit', complete.approveLimit],
     ['data-display-mode', complete.displayMode],
@@ -314,22 +385,40 @@ export function serializePackage(main, settings, meta = {}, Parser = globalThis.
     ['data-pagination', complete.pagination],
     ['data-progress', complete.progress],
   ].map(([name, value]) => ` ${name}="${escapeHtml(value)}"`).join('');
-  const themeId = meta.themeId || 'base';
-  const mainMenu = meta.mainMenu
-    || ensureMainMenuFromPages(emptyMainMenu(themeId), themeId, pagesFromMain(main));
-  const menuHtml = extractMainMenuItems(mainMenu).length || (mainMenu.children || []).length
-    ? `${serializeContent(mainMenu).trimEnd()}\n`
-    : `${serializeContent(emptyMainMenu(themeId)).trimEnd()}\n`;
+
+  const bodyHtml = document.body.innerHTML.trim();
   return `<!DOCTYPE html>
 <html lang="${escapeHtml(complete.lang)}"${single}>
 <head>
-  <meta charset="utf-8">
-${themeMeta}  <title>${escapeHtml(complete.title)}</title>
+${head.join('\n')}
 </head>
-<body${body}>
-${presentationHtml(complete, Parser)}
-${menuHtml}${serializeContent(main).trimEnd()}
+<body${bodyAttrs}>
+${bodyHtml}
 </body>
 </html>
 `;
+}
+
+/**
+ * Writes content.html from the theme shell without presentation markup.
+ * @param {import('./parser.js').Node} main Parsed main element.
+ * @param {Object<string, string>} settings Package settings.
+ * @param {{themeId?: string, themeVersion?: string, format?: string, mainMenu?: import('./parser.js').Node, globalPages?: import('./parser.js').Node, references?: Array, shell?: string}} [meta] Theme stamp and optional surfaces.
+ * @param {typeof DOMParser} [Parser] DOM parser constructor.
+ * @returns {string} Canonical content.html.
+ */
+export function serializePackage(main, settings, meta = {}, Parser = globalThis.DOMParser) {
+  const themeId = meta.themeId || 'base';
+  const shell = meta.shell || themeContentTemplate(meta.themeId ? meta.themeId : 'base');
+  return fillContentShell(shell, {
+    main,
+    mainMenu: meta.mainMenu
+      || ensureMainMenuFromPages(emptyMainMenu(themeId), themeId, pagesFromMain(main)),
+    globalPages: meta.globalPages || emptyGlobalPages(),
+    settings,
+    references: meta.references,
+    themeId: meta.themeId,
+    themeVersion: meta.themeVersion,
+    format: meta.format,
+  }, Parser);
 }

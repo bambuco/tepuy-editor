@@ -8,7 +8,6 @@
 import { createButton, createList } from '../../vendor/edy/src/ui/controls.js';
 import {
   collectIds,
-  collectPages,
   collectReferences,
   controlTreeLabel,
   fieldValues,
@@ -19,10 +18,10 @@ import {
 } from '../controls/library.js';
 import { nodeAt } from '../core/edit.js';
 import { extractMainMenuItems, themeHasMainMenu } from '../core/menu.js';
-import { settingsFields } from '../core/package.js';
+import { serializePackage, settingsFields } from '../core/package.js';
 import { buildPreviewHtml } from '../core/preview.js';
-import { serializeContent } from '../core/serializer.js';
 import { findTheme } from '../core/themes.js';
+import { serializeIndexDocument } from '../metadata/index-document.js';
 import { filterLog } from '../core/host.js';
 import { t } from '../i18n/messages.js';
 import { renderCanvas } from './canvas.js';
@@ -31,8 +30,11 @@ import {
   addOrphanMenuItem,
   auditEntries,
   auditNeedsLoad,
+  currentControlTree,
   currentDocument,
   currentEditor,
+  currentGlobalPages,
+  currentIndexDocument,
   currentMainMenu,
   currentPackageName,
   currentPackageRef,
@@ -54,8 +56,10 @@ import {
   rememberCustom,
   refreshLog,
   selectNode,
+  selectedContentRoot,
   setNodeDraft,
   setSettingsDraft,
+  subscribePreview,
   subscribeSession,
   updateCustom,
   updateMenuItem,
@@ -74,42 +78,16 @@ export const ACTIVITY_VIEWS = [
   { id: 'audit', titleKey: 'menu.view.audit', icon: 'ⓘ' },
 ];
 
-/** @type {Array<{id: string, title: string, path: string}>} */
+/** @type {Array<{id: string, titleKey: string, path: string}>} */
 const COMMON_FILES = [
-  { id: 'lang', title: 'Lenguaje', path: 'custom/lang.js' },
-  { id: 'default-css', title: 'Estilos', path: 'custom/default.css' },
-  { id: 'mobile-css', title: 'Estilos móviles', path: 'custom/mobile.css' },
-  { id: 'stories', title: 'Animaciones', path: 'custom/stories.js' },
-  { id: 'lib', title: 'Script', path: 'custom/lib.js' },
+  { id: 'lang', titleKey: 'common.file.lang', path: 'custom/lang.js' },
+  { id: 'default-css', titleKey: 'common.file.default-css', path: 'custom/default.css' },
+  { id: 'mobile-css', titleKey: 'common.file.mobile-css', path: 'custom/mobile.css' },
+  { id: 'stories', titleKey: 'common.file.stories', path: 'custom/stories.js' },
+  { id: 'lib', titleKey: 'common.file.lib', path: 'custom/lib.js' },
 ];
 
 const openedDocuments = new Set();
-
-const SHELL_STYLE = `
-.tepuy-controls { display: flex; flex-direction: column; gap: 8px; }
-.tepuy-control-grid { display: flex; flex-wrap: wrap; gap: 6px; }
-.tepuy-control-grid .edy-button { min-height: 2.4rem; white-space: normal; }
-.edy-activity .edy-button {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.edy-activity .edy-icon { font-size: 18px; }
-.tepuy-property { display: flex; flex-direction: column; gap: 6px; padding: 8px; }
-.tepuy-property label { display: flex; flex-direction: column; gap: 4px; }
-.tepuy-property textarea { min-height: 5rem; }
-.tepuy-property input, .tepuy-property select, .tepuy-property textarea { width: 100%; box-sizing: border-box; color: var(--edy-text, #000); }
-.tepuy-menu-edit { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--edy-border, #ddd); }
-.tepuy-menu-edit h3 { margin: 0; font-size: 0.9rem; }
-.tepuy-menu-row { display: grid; grid-template-columns: 1fr 1fr auto; gap: 4px; align-items: end; }
-.tepuy-preview { display: flex; flex-direction: column; height: 100%; min-height: 100%; }
-.tepuy-preview iframe { flex: 1; width: 100%; min-height: 240px; border: 0; background: #fff; }
-.tepuy-files, .tepuy-audit { display: flex; flex-direction: column; gap: 8px; padding: 8px; }
-.tepuy-files h3, .tepuy-audit h3 { margin: 8px 0 0; font-size: 0.85rem; }
-.tepuy-audit label { display: flex; flex-direction: column; gap: 4px; font-size: 0.85rem; }
-.tepuy-audit-row { display: flex; flex-direction: column; gap: 2px; padding: 6px 0; border-bottom: 1px solid var(--edy-border, #ddd); }
-.tepuy-audit-row small { opacity: 0.75; }
-`;
 
 /**
  * @param {import('../core/parser.js').Node} node Content node.
@@ -132,57 +110,74 @@ function nodeLabel(node) {
     return specific;
   }
   if (node.type === 'page') {
-    return node.attrs?.ptitle || node.attrs?.id || 'Página';
+    return node.attrs?.ptitle || node.attrs?.id || t('menu.control.page');
   }
   if (node.type === 'subpage') {
-    return node.attrs?.['data-title'] || 'Subpágina';
+    return node.attrs?.['data-title'] || t('menu.control.subpage');
   }
   if (node.type === 'box') {
-    return node.attrs?.label || 'Bloque';
+    return node.attrs?.label || t('canvas.block');
   }
   if (node.type === 'heading') {
-    return nodeText(node) || (node.tag || 'título').toUpperCase();
+    return nodeText(node) || (node.tag || 'h').toUpperCase();
   }
   if (node.type === 'paragraph') {
-    return nodeText(node) || 'Párrafo';
+    return nodeText(node) || t('menu.control.paragraph');
   }
   if (node.type === 'image') {
-    return node.attrs?.alt || 'Imagen';
+    return node.attrs?.alt || t('menu.control.image');
   }
   if (node.type === 'link') {
-    return nodeText(node) || 'Enlace';
+    return nodeText(node) || t('canvas.link');
   }
   return node.tag || node.type;
 }
 
 /**
- * @param {import('../core/parser.js').Node[]} nodes Content nodes.
- * @param {number[]} [path] Child indexes already walked.
- * @param {import('../core/parser.js').Node|null} [parent] Node that owns these children.
- * @returns {Array<{label: string, path: number[], children?: Array}>} Tree rows.
+ * @param {import('../controls/walker.js').ControlInstance} instance Walked control.
+ * @returns {string} Label for the structure tree.
  */
-function treeItems(nodes, path = [], parent = null) {
-  if (parent && htmlRegions(parent).some((region) => Array.isArray(region.path) && region.path.length === 0)) {
-    return [];
+function instanceLabel(instance) {
+  const node = Array.isArray(instance.node) ? instance.node[0] : instance.node;
+  if (instance.controlId === 'richtext') {
+    return nodeLabel(node) || t('menu.control.richtext');
   }
-  const hidden = new Set(
-    (parent ? htmlRegions(parent) : [])
-      .filter((region) => region.path?.length === 1)
-      .map((region) => region.path[0]),
-  );
-  const items = [];
-  (nodes || []).forEach((node, index) => {
-    if (hidden.has(index) || node.type === 'text' || node.type === 'comment') {
-      return;
+  return nodeLabel(node) || t(`menu.control.${instance.controlId}`);
+}
+
+/**
+ * @param {import('../controls/walker.js').ControlInstance[]} instances Walked controls.
+ * @param {'main'|'global'} scope Selection root.
+ * @returns {Array<{label: string, path: number[], scope: string, children?: Array}>} Tree rows.
+ */
+function instanceTreeItems(instances, scope) {
+  return (instances || []).map((instance) => {
+    const item = {
+      label: instanceLabel(instance),
+      path: [...instance.path],
+      scope,
+    };
+    if (instance.children?.length) {
+      item.children = instanceTreeItems(instance.children, scope);
     }
-    const next = [...path, index];
-    const children = treeItems(node.children, next, node);
-    const item = { label: nodeLabel(node), path: next };
-    if (children.length) {
-      item.children = children;
-    }
-    items.push(item);
+    return item;
   });
+}
+
+/**
+ * @returns {Array<{label: string, path: number[], scope?: string, children?: Array}>} Structure rows.
+ */
+function structureTreeItems() {
+  const { pages, globals } = currentControlTree();
+  const items = instanceTreeItems(pages, 'main');
+  if (globals.length) {
+    items.push({
+      label: t('menu.control.global-pages'),
+      path: [],
+      scope: 'global',
+      children: instanceTreeItems(globals, 'global'),
+    });
+  }
   return items;
 }
 
@@ -293,6 +288,25 @@ function liveView(render) {
   };
 }
 
+/**
+ * Preview host that rebuilds only on notifyPreview (Apply, structure, view switches).
+ * @param {Function} render Draws the applied preview into a host element.
+ * @returns {{element: HTMLElement, dispose: Function}} View contribution.
+ */
+function previewLiveView(render) {
+  const section = document.createElement('section');
+  section.className = 'tepuy-panel';
+  const draw = () => render(section);
+  draw();
+  const unsubscribe = subscribePreview(draw);
+  return {
+    element: section,
+    dispose() {
+      unsubscribe();
+    },
+  };
+}
+
 /** @type {{user: string, operation: string, from: string, to: string}} */
 const auditFilter = { user: '', operation: '', from: '', to: '' };
 
@@ -386,7 +400,7 @@ function filterField(key, type, value, onInput) {
 
 /**
  * @param {Object} context Edy extension context.
- * @param {{id: string, title: string, path: string}} file Common package file.
+ * @param {{id: string, titleKey: string, path: string}} file Common package file.
  * @returns {void}
  */
 function openCommonFile(context, file) {
@@ -440,17 +454,13 @@ function activityFace(id) {
  * @returns {void}
  */
 export function registerActivity(context) {
-  const style = document.createElement('style');
-  style.textContent = SHELL_STYLE;
-  currentEditor()?.shadow.append(style);
-
   context.views.register('structure', {
     ...activityFace('structure'),
     location: 'primary',
     render: () => liveView((section) => {
       const status = document.createElement('p');
-      status.textContent = currentSelection() || 'Selecciona una página.';
-      const list = createList(treeItems(currentDocument().children), {
+      status.textContent = currentSelection() || t('panel.select-page');
+      const list = createList(structureTreeItems(), {
         tree: true,
         onSelect: (item) => selectNode(item),
       });
@@ -562,7 +572,7 @@ export function registerActivity(context) {
       section.className = 'tepuy-controls';
       for (const file of COMMON_FILES) {
         section.append(createButton({
-          label: `${file.title} (${file.path})`,
+          label: `${t(file.titleKey)} (${file.path})`,
           onClick: () => openCommonFile(context, file),
         }));
       }
@@ -595,7 +605,7 @@ export function registerActivity(context) {
         return;
       }
       const path = currentSelectionPath();
-      const node = path ? nodeAt(currentDocument(), path) : null;
+      const node = path ? nodeAt(selectedContentRoot(), path) : null;
       const parts = [];
       if (!node) {
         const status = document.createElement('p');
@@ -649,18 +659,18 @@ export function registerActivity(context) {
   });
 
   context.views.register('preview', {
-    title: 'Vista previa',
+    title: t('menu.view.preview'),
     location: 'preview',
     viewport: {
       width: 1024,
       height: 768,
       scale: 'auto',
       presets: [
-        { id: 'desktop', label: 'Escritorio', width: 1280, height: 800 },
-        { id: 'mobile', label: 'Móvil', width: 390, height: 844 },
+        { id: 'desktop', label: t('menu.view.preview.desktop'), width: 1280, height: 800 },
+        { id: 'mobile', label: t('menu.view.preview.mobile'), width: 390, height: 844 },
       ],
     },
-    render: () => liveView((section) => {
+    render: () => previewLiveView((section) => {
       const theme = findTheme(currentThemeId());
       const mobile = currentPreviewMode() === 'mobile';
       const documentNode = currentDocument();
@@ -669,36 +679,39 @@ export function registerActivity(context) {
       const frame = document.createElement('iframe');
       frame.title = t('menu.view.preview');
       frame.setAttribute('sandbox', '');
+      const index = currentIndexDocument();
+      const themeId = currentThemeId();
       frame.srcdoc = buildPreviewHtml({
-        html: serializeContent(documentNode),
         variables: theme?.variables || {},
         mobile,
-        settings,
-        pages: collectPages(documentNode),
-        mainMenu: currentMainMenu(),
-        references: collectReferences(documentNode),
+        settings: {
+          ...settings,
+          autoload: index.bodyAttrs?.['data-autoload'] || settings.autoload,
+        },
         view: currentPackageView(),
         autoloadNote: t('panel.autoload'),
+        indexHtml: serializeIndexDocument(index),
+        contentHtml: serializePackage(documentNode, settings, {
+          themeId,
+          themeVersion: theme?.version || '1.0.0',
+          mainMenu: currentMainMenu(),
+          globalPages: currentGlobalPages(),
+          references: collectReferences(documentNode),
+        }),
       });
-      const notes = [];
-      if (hasDraft()) {
-        const pending = document.createElement('p');
-        pending.textContent = t('panel.preview-pending');
-        notes.push(pending);
-      }
-      section.replaceChildren(...notes, frame);
+      section.replaceChildren(frame);
     }),
   });
 
   context.views.register('content-html', {
     title: 'content.html',
     location: 'editor',
-    render: () => renderCanvas('content'),
+    render: () => renderCanvas('content', context),
   });
   context.views.register('index-html', {
     title: 'index.html',
     location: 'editor',
-    render: () => renderCanvas('index'),
+    render: () => renderCanvas('index', context),
   });
   context.views.open('content-html');
 }

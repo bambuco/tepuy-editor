@@ -113,3 +113,22 @@ export function parseMainMenuHtml(html, Parser = globalThis.DOMParser) {
   const document = new Parser().parseFromString(html, 'text/html');
   return parseMainMenuDocument(document);
 }
+
+/**
+ * @param {Document} document Parsed package document.
+ * @returns {Node|null} Global pages container, or null when absent.
+ */
+export function parseGlobalPagesDocument(document) {
+  const element = document.querySelector('#global-pages');
+  return element ? parseDomNode(element) : null;
+}
+
+/**
+ * @param {string} html Package HTML.
+ * @param {typeof DOMParser} [Parser] DOM parser constructor.
+ * @returns {Node|null} Global pages container, or null when absent.
+ */
+export function parseGlobalPagesHtml(html, Parser = globalThis.DOMParser) {
+  const document = new Parser().parseFromString(html, 'text/html');
+  return parseGlobalPagesDocument(document);
+}

@@ -5,12 +5,13 @@
  * @license http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
+import { buildControlGroups, getControl } from '../controls/registry.js';
 import { t } from '../i18n/messages.js';
 
 /**
  * @typedef {Object} Control
  * @property {string} id Stable control identifier.
- * @property {string} icon Short icon shown on the control button.
+ * @property {string} icon Edy icon alias (Font Awesome) shown on the control button.
  * @property {string} phase Delivery phase that inserts this control.
  */
 
@@ -21,106 +22,7 @@ import { t } from '../i18n/messages.js';
  */
 
 /** @type {ControlGroup[]} */
-export const CONTROL_GROUPS = [
-  {
-    id: 'structure',
-    controls: [
-      { id: 'page', icon: 'Pá', phase: 'F4' },
-      { id: 'subpage', icon: 'Sb', phase: 'F4' },
-    ],
-  },
-  {
-    id: 'text',
-    controls: [
-      { id: 'paragraph', icon: '¶', phase: 'F4' },
-      { id: 'heading-2', icon: 'H2', phase: 'F4' },
-      { id: 'heading-3', icon: 'H3', phase: 'F4' },
-      { id: 'heading-4', icon: 'H4', phase: 'F4' },
-      { id: 'heading-5', icon: 'H5', phase: 'F4' },
-      { id: 'list', icon: '•', phase: 'F4' },
-      { id: 'internal-link', icon: '↗', phase: 'F4' },
-      { id: 'quote', icon: '«', phase: 'F4' },
-      { id: 'bold', icon: 'B', phase: 'F4' },
-      { id: 'italic', icon: 'I', phase: 'F4' },
-    ],
-  },
-  {
-    id: 'media',
-    controls: [
-      { id: 'image', icon: '▣', phase: 'F4' },
-      { id: 'audio', icon: '♪', phase: 'F4' },
-      { id: 'video', icon: '▶', phase: 'F4' },
-      { id: 'table', icon: '⊞', phase: 'F4' },
-      { id: 'code', icon: '</>', phase: 'F4' },
-      { id: 'mobile-only', icon: 'Mó', phase: 'F4' },
-      { id: 'desktop-only', icon: 'Es', phase: 'F4' },
-    ],
-  },
-  {
-    id: 'blocks',
-    controls: [
-      { id: 'important', icon: '!', phase: 'F4' },
-      { id: 'example', icon: 'Ej', phase: 'F4' },
-      { id: 'note', icon: 'No', phase: 'F4' },
-      { id: 'link-box', icon: '⧉', phase: 'F4' },
-      { id: 'connection', icon: '⇄', phase: 'F4' },
-      { id: 'activity-box', icon: '★', phase: 'F4' },
-    ],
-  },
-  {
-    id: 'instructions',
-    controls: [
-      { id: 'instruction-info', icon: 'i', phase: 'F4' },
-      { id: 'instruction-danger', icon: '✕', phase: 'F4' },
-      { id: 'instruction-warning', icon: '△', phase: 'F4' },
-      { id: 'instruction-none', icon: '○', phase: 'F4' },
-      { id: 'instruction-default', icon: '●', phase: 'F4' },
-    ],
-  },
-  {
-    id: 'format',
-    controls: [
-      { id: 'tabs', icon: '▤', phase: 'F4' },
-      { id: 'accordion', icon: '≡', phase: 'F7' },
-      { id: 'cards', icon: '▦', phase: 'F7' },
-      { id: 'timeline', icon: '→', phase: 'F7' },
-      { id: 'gallery', icon: '▩', phase: 'F7' },
-      { id: 'interactive-video', icon: '⏯', phase: 'F7' },
-    ],
-  },
-  {
-    id: 'activities',
-    controls: [
-      { id: 'quiz', icon: '?', phase: 'F4' },
-      { id: 'cloze', icon: '[]', phase: 'F7' },
-      { id: 'drag-drop', icon: '↔', phase: 'F7' },
-      { id: 'crossword', icon: '#', phase: 'F7' },
-      { id: 'word-search', icon: 'A', phase: 'F7' },
-      { id: 'match', icon: '⇔', phase: 'F7' },
-    ],
-  },
-  {
-    id: 'references',
-    controls: [
-      { id: 'reference-image', icon: '▣', phase: 'F4' },
-      { id: 'reference-video', icon: '▶', phase: 'F4' },
-      { id: 'reference-audio', icon: '♪', phase: 'F4' },
-      { id: 'reference-table', icon: '⊞', phase: 'F4' },
-      { id: 'reference-web', icon: 'W', phase: 'F4' },
-      { id: 'reference-book', icon: 'Li', phase: 'F4' },
-      { id: 'reference-general', icon: 'G', phase: 'F4' },
-    ],
-  },
-  {
-    id: 'presentation',
-    controls: [
-      { id: 'intro', icon: 'In', phase: 'F4' },
-      { id: 'objective', icon: 'Ob', phase: 'F4' },
-      { id: 'duration', icon: 'Du', phase: 'F4' },
-      { id: 'title', icon: 'Tí', phase: 'F4' },
-    ],
-  },
-];
+export const CONTROL_GROUPS = buildControlGroups();
 
 /**
  * @param {Control} control Catalog control.
@@ -147,7 +49,7 @@ export function controlLabel(control) {
 }
 
 /**
- * @returns {Array<Control & {groupId: string, commandId: string, label: string}>} Every insertable control.
+ * @returns {Array<Control & {groupId: string, commandId: string, label: string, priority: number}>} Every insertable control.
  */
 export function allControls() {
   return CONTROL_GROUPS.flatMap((group) => group.controls.map((control) => ({
@@ -155,6 +57,7 @@ export function allControls() {
     label: controlLabel(control),
     groupId: group.id,
     commandId: controlCommandId(control),
+    priority: getControl(control.id)?.priority ?? 0,
   })));
 }
 

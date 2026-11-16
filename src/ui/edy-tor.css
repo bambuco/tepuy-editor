@@ -1,0 +1,329 @@
+/* Tepuy shell and canvas styles loaded into the Edy shadow root via customCss. */
+
+.tepuy-about {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 32rem;
+  line-height: 1.45;
+}
+
+.tepuy-about p {
+  margin: 0;
+}
+
+.tepuy-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tepuy-control-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tepuy-control-grid .edy-button {
+  min-height: 2.4rem;
+  white-space: normal;
+  border: 1px solid var(--edy-color-border);
+}
+
+.edy-activity .edy-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.edy-activity .edy-icon {
+  font-size: 18px;
+}
+
+.tepuy-property {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+}
+
+.tepuy-property label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.tepuy-property textarea {
+  min-height: 5rem;
+}
+
+.tepuy-property input,
+.tepuy-property select,
+.tepuy-property textarea {
+  width: 100%;
+  box-sizing: border-box;
+  color: var(--edy-text, #000);
+}
+
+.tepuy-menu-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--edy-border, #ddd);
+}
+
+.tepuy-menu-edit h3 {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.tepuy-menu-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 4px;
+  align-items: end;
+}
+
+.tepuy-preview {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 100%;
+}
+
+.tepuy-preview iframe {
+  flex: 1;
+  width: 100%;
+  min-height: 240px;
+  border: 0;
+  background: #fff;
+}
+
+.tepuy-files,
+.tepuy-audit {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px;
+}
+
+.tepuy-files h3,
+.tepuy-audit h3 {
+  margin: 8px 0 0;
+  font-size: 0.85rem;
+}
+
+.tepuy-audit label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.85rem;
+}
+
+.tepuy-audit-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--edy-border, #ddd);
+}
+
+.tepuy-audit-row small {
+  opacity: 0.75;
+}
+
+.tepuy-canvas {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: var(--tepuy-color-bg, #f2f2f2);
+  color: var(--tepuy-color-heading, #24323a);
+}
+
+.tepuy-canvas__scroll {
+  flex: 1;
+  overflow: auto;
+  padding: 16px 20px 48px;
+}
+
+.tepuy-index-actions {
+  z-index: 5;
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  flex-shrink: 0;
+  padding: 10px 16px;
+  border-top: 1px solid #d5dde3;
+  background: rgba(255, 255, 255, .96);
+  box-shadow: 0 -4px 12px rgba(0, 0, 0, .06);
+}
+
+.tepuy-index-actions button {
+  font: inherit;
+  min-width: 6rem;
+  padding: 6px 14px;
+}
+
+.tepuy-index-actions button:disabled {
+  opacity: .45;
+  cursor: default;
+}
+
+.tepuy-index-actions.is-active {
+  border-top-color: var(--tepuy-color-important, #e2793d);
+}
+
+.tepuy-index-form {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 42rem;
+}
+
+.tepuy-block {
+  position: relative;
+  margin: 10px 0;
+  padding: 12px 10px 8px;
+  border: 1px solid transparent;
+  background: rgba(255, 255, 255, .72);
+}
+
+.tepuy-block.is-selected {
+  border-color: var(--tepuy-color-important, #e2793d);
+}
+
+.tepuy-block__chrome {
+  display: none;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 2;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 2px;
+}
+
+.tepuy-block:hover>.tepuy-block__chrome {
+  display: flex;
+}
+
+.tepuy-block:hover:has(.tepuy-block:hover)>.tepuy-block__chrome {
+  display: none;
+}
+
+.tepuy-block.is-editing>.tepuy-block__chrome {
+  display: flex;
+}
+
+.tepuy-block__chrome button,
+.tepuy-slot {
+  font: inherit;
+}
+
+.tepuy-block__actions {
+  display: flex;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.tepuy-block__drag {
+  cursor: grab;
+}
+
+.tepuy-block__actions {
+  margin-left: auto;
+  display: flex;
+  gap: 4px;
+}
+
+.tepuy-slot {
+  display: block;
+  width: 100%;
+  min-height: 2.2rem;
+  margin-top: 8px;
+  border: 1px dashed #7f97a6;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.tepuy-slot.is-target,
+.tepuy-drop.is-drop {
+  outline: 2px solid var(--tepuy-color-important, #e2793d);
+}
+
+.tepuy-slot--page {
+  margin: 24px 0;
+  min-height: 3rem;
+  font-weight: 600;
+}
+
+.tepuy-main-menu {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+  padding: 8px 0;
+  border-bottom: 1px solid #d5dde3;
+}
+
+.tepuy-main-menu button {
+  font: inherit;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  padding: 4px 8px;
+}
+
+.tepuy-main-menu button.is-active {
+  border-bottom: 2px solid var(--tepuy-color-important, #e2793d);
+  font-weight: 700;
+}
+
+.tepuy-drop {
+  height: 8px;
+  margin: 2px 0;
+}
+
+.tepuy-html {
+  min-height: 1.6rem;
+  padding: 4px;
+  cursor: text;
+}
+
+.tepuy-html__label,
+.tepuy-badge {
+  font-size: .8rem;
+  font-weight: 700;
+}
+
+.tepuy-locked {
+  padding: 12px;
+  border: 1px solid #d5dde3;
+  background: #fff;
+}
+
+.tepuy-tabs {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.tepuy-panel-edit {
+  padding: 8px;
+  border: 1px dashed #c5d0d8;
+}
+
+.tepuy-canvas .edy-form__actions {
+  display: none;
+}
+
+.tepuy-canvas img,
+.tepuy-canvas video {
+  max-width: 100%;
+}

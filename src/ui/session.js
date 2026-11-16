@@ -18,7 +18,6 @@ import {
   moveNode,
   normalizedHtml,
   placeControl,
-  PRESENTATION_FIELDS,
   regionHtml,
 } from '../controls/library.js';
 import { editableValue, nodeAt } from '../core/edit.js';
@@ -33,15 +32,31 @@ import {
   setMenuItemTitle,
   themeHasMainMenu,
 } from '../core/menu.js';
-import { packageSettings, readPackageContent, readPackageSettings, readPackageTheme, serializePackage } from '../core/package.js';
+import { emptyGlobalPages, packageSettings, readPackageContent, readPackageSettings, readPackageTheme, serializePackage } from '../core/package.js';
 import { parseContentHtml } from '../core/parser.js';
+import { themeIndexTemplate } from '../core/themes.js';
+import { walkPackageContent } from '../controls/walker.js';
+import {
+  cloneIndexDocument,
+  listMetadataNodes,
+  migrateToMetadataIndex,
+  parseIndexHtml,
+  readMetadata,
+  readMetadataNode,
+  serializeIndexDocument,
+  writeMetadataValue,
+} from '../metadata/index-document.js';
 import { SAMPLE_CONTENT } from '../sample-content.js';
 
 /** @type {ReturnType<typeof createDocumentHistory>|null} */
 let history = null;
 /** @type {string|null} */
 let savedHtml = null;
-/** @type {{kind: 'node'|'settings'|'html', path?: number[], fields?: Object<string, string>, target?: Object, html?: string}|null} */
+/** @type {string|null} */
+let savedIndexHtml = null;
+/** @type {string|null} */
+let hostIndexHtml = null;
+/** @type {{kind: 'node'|'settings'|'html'|'index', path?: number[], fields?: Object<string, string>, target?: Object, html?: string, values?: Object<string, {value: string, unit?: string}>}|null} */
 let draft = null;
 /** @type {boolean} */
 let settingsOpen = false;
@@ -49,9 +64,11 @@ let settingsOpen = false;
 let editor = null;
 /** @type {{path: number[]}|null} */
 let selection = null;
+/** @type {'main'|'global'} */
+let selectionScope = 'main';
 /** @type {{path: number[]}|null} */
 let insertion = null;
-/** @type {{scope: 'node', path: number[], regionId: string}|{scope: 'settings', name: string}|null} */
+/** @type {{scope: 'node', path: number[], regionId: string}|{scope: 'metadata', key: string}|null} */
 let htmlFocus = null;
 /** @type {'auto'|'desktop'|'mobile'} */
 let previewMode = 'auto';
@@ -59,6 +76,8 @@ let previewMode = 'auto';
 let packageView = 'content';
 /** @type {Set<Function>} */
 const listeners = new Set();
+/** @type {Set<Function>} */
+const previewListeners = new Set();
 /** @type {ReturnType<import('../core/host.js').createHostClient>|null} */
 let host = null;
 /** @type {string|null} */
@@ -89,18 +108,37 @@ const customDrafts = new Map();
 let activePageId = null;
 
 /**
+ * @param {string} themeId Theme id.
+ * @param {Object<string, string>} [settings] Package settings.
+ * @param {string} [legacyHtml] Optional legacy content.html for migration.
+ * @returns {import('../metadata/index-document.js').IndexDocument} Index document.
+ */
+function seedIndex(themeId, settings = {}, legacyHtml = '') {
+  return migrateToMetadataIndex(
+    themeIndexTemplate(themeId),
+    { themeId, themeVersion: '1.0.0' },
+    legacyHtml,
+    settings,
+  );
+}
+
+/**
  * @param {import('../core/parser.js').Node} document Content tree.
  * @param {string} themeId Active theme identifier.
  * @param {Object<string, string>} [settings] Package settings.
  * @param {import('../core/parser.js').Node} [mainMenu] Main menu tree.
- * @returns {{themeId: string, document: import('../core/parser.js').Node, mainMenu: import('../core/parser.js').Node, settings: Object<string, string>}} History snapshot.
+ * @param {import('../core/parser.js').Node} [globalPages] Global pages container.
+ * @param {import('../metadata/index-document.js').IndexDocument} [index] Presentation index document.
+ * @returns {{themeId: string, document: import('../core/parser.js').Node, mainMenu: import('../core/parser.js').Node, globalPages: import('../core/parser.js').Node, settings: Object<string, string>, index: import('../metadata/index-document.js').IndexDocument}} History snapshot.
  */
-function packageState(document, themeId, settings, mainMenu) {
+function packageState(document, themeId, settings, mainMenu, globalPages, index) {
   return {
     themeId,
     document,
     mainMenu: mainMenu || emptyMainMenu(themeId),
+    globalPages: globalPages || emptyGlobalPages(),
     settings: packageSettings(settings || {}),
+    index: index || seedIndex(themeId, settings || {}),
   };
 }
 
@@ -109,15 +147,25 @@ function packageState(document, themeId, settings, mainMenu) {
  * @param {Object<string, string>} settings Package settings.
  * @param {string} themeId Active theme.
  * @param {import('../core/parser.js').Node} [mainMenu] Main menu tree.
+ * @param {import('../core/parser.js').Node} [globalPages] Global pages container.
  * @returns {string} HTML stored for this package.
  */
-function packageHtml(document, settings, themeId, mainMenu) {
+function packageHtml(document, settings, themeId, mainMenu, globalPages) {
   return serializePackage(document, settings, {
     themeId,
     themeVersion: '1.0.0',
     format: '2.0',
     mainMenu: mainMenu || emptyMainMenu(themeId),
+    globalPages: globalPages || emptyGlobalPages(),
   });
+}
+
+/**
+ * @param {import('../metadata/index-document.js').IndexDocument} index Index document.
+ * @returns {string} Serialized index.html.
+ */
+function indexHtml(index) {
+  return serializeIndexDocument(index);
 }
 
 /**
@@ -134,10 +182,12 @@ function pagesFirstId(mainMenu, main) {
  */
 function documentHistory() {
   if (!history) {
-    const { main, mainMenu } = readPackageContent(SAMPLE_CONTENT, 'base');
+    const { main, mainMenu, globalPages } = readPackageContent(SAMPLE_CONTENT, 'base');
     const settings = readPackageSettings(SAMPLE_CONTENT);
-    history = createDocumentHistory(packageState(main, 'base', settings, mainMenu));
-    savedHtml = packageHtml(main, settings, 'base', mainMenu);
+    const index = seedIndex('base', settings, SAMPLE_CONTENT);
+    history = createDocumentHistory(packageState(main, 'base', settings, mainMenu, globalPages, index));
+    savedHtml = packageHtml(main, settings, 'base', mainMenu, globalPages);
+    savedIndexHtml = indexHtml(index);
     activePageId = pagesFirstId(mainMenu, main);
   }
   return history;
@@ -191,10 +241,75 @@ export function currentDocument() {
 }
 
 /**
+ * @returns {import('../metadata/index-document.js').IndexDocument} Current index.html tree.
+ */
+export function currentIndexDocument() {
+  const state = documentHistory().current();
+  return state.index || seedIndex(state.themeId, state.settings);
+}
+
+/**
+ * Rebuilds index markers from a theme template while keeping metadata values.
+ * @param {string} themeId Next theme id.
+ * @returns {import('../metadata/index-document.js').IndexDocument} Next index document.
+ */
+export function buildIndexForTheme(themeId) {
+  const current = currentIndexDocument();
+  /** @type {Object<string, {value: string, unit?: string}>} */
+  const values = {};
+  for (const item of listMetadataNodes(current.body)) {
+    values[item.key] = readMetadataNode(item.node);
+  }
+  const next = seedIndex(themeId, currentSettings());
+  for (const [key, payload] of Object.entries(values)) {
+    writeMetadataValue(next.body, key, payload.value, payload.unit);
+  }
+  next.title = current.title;
+  next.bodyAttrs = {
+    ...next.bodyAttrs,
+    ...Object.fromEntries(
+      ['data-autoload', 'data-display-window', 'data-window-width', 'data-window-height']
+        .filter((name) => current.bodyAttrs?.[name])
+        .map((name) => [name, current.bodyAttrs[name]]),
+    ),
+  };
+  return next;
+}
+
+/**
  * @returns {import('../core/parser.js').Node} Current main menu tree.
  */
 export function currentMainMenu() {
   return documentHistory().current().mainMenu || emptyMainMenu(currentThemeId());
+}
+
+/**
+ * @returns {import('../core/parser.js').Node} Current global pages container.
+ */
+export function currentGlobalPages() {
+  return documentHistory().current().globalPages || emptyGlobalPages();
+}
+
+/**
+ * Control-instance tree for Structure, breadcrumbs, and insertion ceilings.
+ * @returns {{pages: import('../controls/walker.js').ControlInstance[], globals: import('../controls/walker.js').ControlInstance[]}}
+ */
+export function currentControlTree() {
+  return walkPackageContent(currentDocument(), currentGlobalPages());
+}
+
+/**
+ * @returns {import('../core/parser.js').Node} Root used by the current selection.
+ */
+export function selectedContentRoot() {
+  return selectionScope === 'global' ? currentGlobalPages() : currentDocument();
+}
+
+/**
+ * @returns {'main'|'global'} Scope of the current selection.
+ */
+export function currentSelectionScope() {
+  return selectionScope;
 }
 
 /**
@@ -274,7 +389,7 @@ export function openPackageSettings() {
  * @returns {string|null} Applied text of the selected node.
  */
 export function currentSelection() {
-  const node = selection ? nodeAt(currentDocument(), selection.path) : null;
+  const node = selection ? nodeAt(selectedContentRoot(), selection.path) : null;
   if (!node) {
     return null;
   }
@@ -289,16 +404,17 @@ export function currentSelectionPath() {
 }
 
 /**
- * @param {{path?: number[]}|null} item Selected tree row.
+ * @param {{path?: number[], scope?: 'main'|'global'}|null} item Selected tree row.
  * @returns {void}
  */
 export function selectNode(item) {
   if (htmlFocus && !draft) {
     htmlFocus = null;
   }
+  selectionScope = item?.scope === 'global' ? 'global' : 'main';
   selection = item?.path ? { path: [...item.path] } : null;
   settingsOpen = false;
-  if (selection?.path?.length) {
+  if (selectionScope === 'main' && selection?.path?.length) {
     const page = nodeAt(currentDocument(), [selection.path[0]]);
     if (page?.type === 'page' && page.attrs?.id) {
       activePageId = page.attrs.id;
@@ -352,8 +468,8 @@ function sameHtmlTarget(left, right) {
   if (!left || !right || left.scope !== right.scope) {
     return false;
   }
-  if (left.scope === 'settings') {
-    return left.name === right.name;
+  if (left.scope === 'metadata') {
+    return left.key === right.key;
   }
   return left.regionId === right.regionId && samePath(left.path || [], right.path || []);
 }
@@ -365,34 +481,35 @@ export function htmlFocusTarget() {
   if (!htmlFocus) {
     return null;
   }
-  return htmlFocus.scope === 'settings'
-    ? { scope: 'settings', name: htmlFocus.name }
+  return htmlFocus.scope === 'metadata'
+    ? { scope: 'metadata', key: htmlFocus.key }
     : { scope: 'node', path: [...htmlFocus.path], regionId: htmlFocus.regionId };
 }
 
 /**
  * Opens one HTML region in the canvas.
- * @param {{scope: 'node', path: number[], regionId: string}|{scope: 'settings', name: string}} target Region to edit.
+ * @param {{scope: 'node', path: number[], regionId: string}|{scope: 'metadata', key: string}} target Region to edit.
  * @returns {'focused'|'pending'} Whether the editor opened.
  */
 export function focusHtml(target) {
   if (draft && !(draft.kind === 'html' && sameHtmlTarget(draft.target, target))) {
     return 'pending';
   }
-  htmlFocus = target.scope === 'settings'
-    ? { scope: 'settings', name: target.name }
+  htmlFocus = target.scope === 'metadata'
+    ? { scope: 'metadata', key: target.key }
     : { scope: 'node', path: [...target.path], regionId: target.regionId };
   publish();
   return 'focused';
 }
 
 /**
- * @param {{scope: 'node', path: number[], regionId: string}|{scope: 'settings', name: string}} target HTML region.
+ * @param {{scope: 'node', path: number[], regionId: string}|{scope: 'metadata', key: string}} target HTML region.
  * @returns {string|null} Applied HTML, or null when the region is missing.
  */
 function appliedHtml(target) {
-  if (target.scope === 'settings') {
-    return normalizedHtml(currentSettings()[target.name] || '', 'rich');
+  if (target.scope === 'metadata') {
+    const item = listMetadataNodes(currentIndexDocument().body).find((entry) => entry.key === target.key);
+    return item ? normalizedHtml(readMetadataNode(item.node).value || '', 'rich') : null;
   }
   const node = nodeAt(currentDocument(), target.path);
   const region = htmlRegions(node).find((item) => item.id === target.regionId);
@@ -401,19 +518,27 @@ function appliedHtml(target) {
 
 /**
  * Keeps HTML typed in the canvas out of the document until Apply.
- * @param {{scope: 'node', path: number[], regionId: string}|{scope: 'settings', name: string}} target HTML region.
+ * @param {{scope: 'node', path: number[], regionId: string}|{scope: 'metadata', key: string}} target HTML region.
  * @param {string} html Untrusted editor HTML.
  * @returns {void}
  */
 export function setHtmlDraft(target, html) {
-  const node = target.scope === 'node' ? nodeAt(currentDocument(), target.path) : null;
-  const region = target.scope === 'node'
-    ? htmlRegions(node).find((item) => item.id === target.regionId)
-    : null;
-  if (target.scope === 'node' && !region) {
+  if (target.scope === 'metadata') {
+    const clean = normalizedHtml(html, 'rich');
+    const current = indexDraft() || readMetadata(currentIndexDocument().body);
+    const next = {
+      ...Object.fromEntries(Object.entries(current).map(([key, payload]) => [key, { ...payload }])),
+      [target.key]: { value: clean },
+    };
+    setIndexDraft(next);
     return;
   }
-  const clean = normalizedHtml(html, target.scope === 'settings' ? 'rich' : region.mode);
+  const node = nodeAt(currentDocument(), target.path);
+  const region = htmlRegions(node).find((item) => item.id === target.regionId);
+  if (!region) {
+    return;
+  }
+  const clean = normalizedHtml(html, region.mode);
   const applied = appliedHtml(target);
   const same = draft?.kind === 'html' && sameHtmlTarget(draft.target, target);
   if (clean === applied) {
@@ -425,14 +550,63 @@ export function setHtmlDraft(target, html) {
   }
   draft = {
     kind: 'html',
-    target: target.scope === 'settings'
-      ? { scope: 'settings', name: target.name }
-      : { scope: 'node', path: [...target.path], regionId: target.regionId },
+    target: { scope: 'node', path: [...target.path], regionId: target.regionId },
     html: clean,
   };
   if (!same) {
     publish();
   }
+}
+
+/**
+ * @param {Object<string, {value: string, unit?: string}>} left Metadata map.
+ * @param {Object<string, {value: string, unit?: string}>} right Metadata map.
+ * @returns {boolean} Whether both maps match.
+ */
+function sameMetadataMaps(left, right) {
+  const keys = new Set([...Object.keys(left || {}), ...Object.keys(right || {})]);
+  for (const key of keys) {
+    const a = left?.[key] || { value: '' };
+    const b = right?.[key] || { value: '' };
+    if ((a.value || '') !== (b.value || '') || (a.unit || '') !== (b.unit || '')) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * Drafts all index metadata values until Apply.
+ * @param {Object<string, {value: string, unit?: string}>} values Next metadata map.
+ * @returns {void}
+ */
+export function setIndexDraft(values) {
+  if (draft && draft.kind !== 'index' && draft.kind !== 'html') {
+    return;
+  }
+  if (draft?.kind === 'html' && draft.target?.scope !== 'metadata') {
+    return;
+  }
+  const applied = readMetadata(currentIndexDocument().body);
+  if (sameMetadataMaps(values, applied)) {
+    if (draft?.kind === 'index') {
+      draft = null;
+      publish();
+    }
+    return;
+  }
+  draft = { kind: 'index', values: structuredClone(values) };
+  publish();
+}
+
+/**
+ * @returns {Object<string, {value: string, unit?: string}>|null} Pending index metadata draft.
+ */
+export function indexDraft() {
+  if (!draft || draft.kind !== 'index' || !draft.values) {
+    return null;
+  }
+  return structuredClone(draft.values);
 }
 
 /**
@@ -521,12 +695,22 @@ export function applyDraft() {
     void recordOperation('settings', 'package', 'settings');
     return 'applied';
   }
-  if (draft.kind === 'html') {
-    if (draft.target?.scope === 'settings') {
-      const next = packageSettings({ ...currentSettings(), [draft.target.name]: draft.html || '' });
-      replaceDocument(currentDocument(), currentThemeId(), { settings: next, keepSelection: true, keepInsertion: true });
-      return 'applied';
+  if (draft.kind === 'index') {
+    const nextIndex = cloneIndexDocument(currentIndexDocument());
+    for (const [key, payload] of Object.entries(draft.values || {})) {
+      writeMetadataValue(nextIndex.body, key, payload.value || '', payload.unit);
+      if (key === 'title') {
+        nextIndex.title = payload.value || '';
+      }
     }
+    replaceDocument(currentDocument(), currentThemeId(), {
+      index: nextIndex,
+      keepSelection: true,
+      keepInsertion: true,
+    });
+    return 'applied';
+  }
+  if (draft.kind === 'html') {
     const next = applyRegionHtml(currentDocument(), draft.target.path, draft.target.regionId, draft.html || '');
     if (!next) {
       return 'invalid';
@@ -589,7 +773,8 @@ export function cancelDraft() {
 export function hasUnsavedChanges() {
   documentHistory();
   return Boolean(draft)
-    || packageHtml(currentDocument(), currentSettings(), currentThemeId(), currentMainMenu()) !== savedHtml;
+    || packageHtml(currentDocument(), currentSettings(), currentThemeId(), currentMainMenu(), currentGlobalPages()) !== savedHtml
+    || indexHtml(currentIndexDocument()) !== savedIndexHtml;
 }
 
 /**
@@ -600,12 +785,15 @@ export function saveDocument() {
   if (draft) {
     return 'draft';
   }
-  const html = packageHtml(currentDocument(), currentSettings(), currentThemeId(), currentMainMenu());
-  if (html === savedHtml) {
+  const html = packageHtml(currentDocument(), currentSettings(), currentThemeId(), currentMainMenu(), currentGlobalPages());
+  const index = indexHtml(currentIndexDocument());
+  if (html === savedHtml && index === savedIndexHtml) {
     return 'unchanged';
   }
   savedHtml = html;
+  savedIndexHtml = index;
   hostHtml = html;
+  hostIndexHtml = index;
   return 'saved';
 }
 
@@ -623,6 +811,7 @@ export function currentPreviewMode() {
 export function setPreviewMode(mode) {
   previewMode = mode;
   publish();
+  notifyPreview();
 }
 
 /**
@@ -639,19 +828,22 @@ export function currentPackageView() {
 export function setPackageView(view) {
   packageView = view;
   publish();
+  notifyPreview();
 }
 
 /**
  * Replaces the open document and drops any pending text.
  * @param {import('../core/parser.js').Node} next Next content tree.
  * @param {string} [themeId] Theme that owns this snapshot. Defaults to the current theme.
- * @param {{keepSelection?: boolean, keepInsertion?: boolean, markSaved?: boolean, settings?: Object, mainMenu?: import('../core/parser.js').Node}} [options] Selection and baseline behavior.
+ * @param {{keepSelection?: boolean, keepInsertion?: boolean, markSaved?: boolean, settings?: Object, mainMenu?: import('../core/parser.js').Node, globalPages?: import('../core/parser.js').Node, index?: import('../metadata/index-document.js').IndexDocument}} [options] Selection and baseline behavior.
  * @returns {void}
  */
 export function replaceDocument(next, themeId = currentThemeId(), options = {}) {
   const settings = options.settings ?? currentSettings();
   const mainMenu = options.mainMenu ?? currentMainMenu();
-  documentHistory().commit(packageState(next, themeId, settings, mainMenu));
+  const globalPages = options.globalPages ?? currentGlobalPages();
+  const index = options.index ?? currentIndexDocument();
+  documentHistory().commit(packageState(next, themeId, settings, mainMenu, globalPages, index));
   draft = null;
   htmlFocus = null;
   if (!options.keepSelection) {
@@ -662,9 +854,11 @@ export function replaceDocument(next, themeId = currentThemeId(), options = {}) 
     insertion = null;
   }
   if (options.markSaved) {
-    savedHtml = packageHtml(next, settings, themeId, mainMenu);
+    savedHtml = packageHtml(next, settings, themeId, mainMenu, globalPages);
+    savedIndexHtml = indexHtml(index);
   }
   publish();
+  notifyPreview();
 }
 
 /**
@@ -705,28 +899,13 @@ export function addPage(options = {}) {
 }
 
 /**
- * Inserts a version-1 control, or opens the presentation field in settings.
+ * Inserts a version-1 control into the content tree.
  * @param {string} id Catalog control identifier.
- * @returns {'inserted'|'settings'|'nowhere'|'pending'|'index'} Insert result.
+ * @returns {'inserted'|'nowhere'|'pending'} Insert result.
  */
 export function insertControl(id) {
   if (hasDraft()) {
     return 'pending';
-  }
-  if (id === 'intro' || id === 'objective') {
-    settingsOpen = false;
-    focusHtml({ scope: 'settings', name: id });
-    return 'index';
-  }
-  const presentation = PRESENTATION_FIELDS[id];
-  if (presentation) {
-    const settings = currentSettings();
-    if (!settings[presentation]) {
-      const defaults = { duration: '1 hora', title: 'Título' };
-      setSettingsDraft({ ...settings, [presentation]: defaults[presentation] });
-    }
-    openPackageSettings();
-    return 'settings';
   }
   if (id === 'page') {
     return addPage() ? 'inserted' : 'nowhere';
@@ -812,6 +991,7 @@ export function undoDocument() {
     htmlFocus = null;
     insertion = null;
     publish();
+    notifyPreview();
   }
   return restored;
 }
@@ -827,6 +1007,7 @@ export function redoDocument() {
     htmlFocus = null;
     insertion = null;
     publish();
+    notifyPreview();
   }
   return restored;
 }
@@ -1011,9 +1192,21 @@ export async function refreshLog() {
  * @param {import('../core/parser.js').Node} [mainMenu] Main menu tree.
  * @returns {void}
  */
-function installDocument(document, themeId, settings, markSaved, mainMenu) {
+/**
+ * @param {import('../core/parser.js').Node} document Content tree.
+ * @param {string} themeId Active theme.
+ * @param {Object<string, string>} settings Package settings.
+ * @param {boolean} markSaved Whether this document is the saved baseline.
+ * @param {import('../core/parser.js').Node} [mainMenu] Main menu tree.
+ * @param {import('../core/parser.js').Node} [globalPages] Global pages.
+ * @param {import('../metadata/index-document.js').IndexDocument} [index] Index document.
+ * @returns {void}
+ */
+function installDocument(document, themeId, settings, markSaved, mainMenu, globalPages, index) {
   const menu = mainMenu || emptyMainMenu(themeId);
-  history = createDocumentHistory(packageState(document, themeId, settings, menu));
+  const globals = globalPages || emptyGlobalPages();
+  const indexDoc = index || seedIndex(themeId, settings);
+  history = createDocumentHistory(packageState(document, themeId, settings, menu, globals, indexDoc));
   draft = null;
   selection = null;
   settingsOpen = false;
@@ -1021,9 +1214,11 @@ function installDocument(document, themeId, settings, markSaved, mainMenu) {
   htmlFocus = null;
   activePageId = pagesFirstId(menu, document);
   if (markSaved) {
-    savedHtml = packageHtml(document, settings, themeId, menu);
+    savedHtml = packageHtml(document, settings, themeId, menu, globals);
+    savedIndexHtml = indexHtml(indexDoc);
   }
   publish();
+  notifyPreview();
 }
 
 /**
@@ -1113,8 +1308,17 @@ export async function openHostPackage(ref) {
   }
   const opened = await host.open(ref);
   let html = '';
+  let indexSource = '';
   try {
     html = await host.read(ref, 'content.html');
+  }
+  catch (error) {
+    if (!(error instanceof HostError) || error.code !== 'not_found') {
+      throw error;
+    }
+  }
+  try {
+    indexSource = await host.read(ref, 'index.html');
   }
   catch (error) {
     if (!(error instanceof HostError) || error.code !== 'not_found') {
@@ -1129,14 +1333,28 @@ export async function openHostPackage(ref) {
   logStamp = 0;
   if (!html) {
     const themeId = opened.themeId || 'base';
-    installDocument(emptyDocument(), themeId, packageSettings({ title: opened.name }), true, emptyMainMenu(themeId));
+    const settings = packageSettings({ title: opened.name });
+    installDocument(
+      emptyDocument(),
+      themeId,
+      settings,
+      true,
+      emptyMainMenu(themeId),
+      undefined,
+      seedIndex(themeId, settings),
+    );
   }
   else {
     const themeId = readPackageTheme(html);
-    const { main, mainMenu } = readPackageContent(html, themeId);
-    installDocument(main, themeId, readPackageSettings(html), true, mainMenu);
+    const settings = readPackageSettings(html);
+    const { main, mainMenu, globalPages } = readPackageContent(html, themeId);
+    const index = indexSource
+      ? parseIndexHtml(indexSource)
+      : migrateToMetadataIndex(themeIndexTemplate(themeId), { themeId, themeVersion: '1.0.0' }, html, settings);
+    installDocument(main, themeId, settings, true, mainMenu, globalPages, index);
   }
   hostHtml = savedHtml;
+  hostIndexHtml = savedIndexHtml;
   await refreshPackages();
   return opened;
 }
@@ -1149,18 +1367,21 @@ export async function saveToHost() {
   if (draft) {
     return 'draft';
   }
-  const html = packageHtml(currentDocument(), currentSettings(), currentThemeId(), currentMainMenu());
+  const html = packageHtml(currentDocument(), currentSettings(), currentThemeId(), currentMainMenu(), currentGlobalPages());
+  const index = indexHtml(currentIndexDocument());
   const extra = customChanges();
   if (!host) {
-    if (html === savedHtml && extra.length === 0) {
+    if (html === savedHtml && index === savedIndexHtml && extra.length === 0) {
       return 'unchanged';
     }
     savedHtml = html;
+    savedIndexHtml = index;
     hostHtml = html;
+    hostIndexHtml = index;
     acceptCustom();
     return 'saved';
   }
-  if (html === hostHtml && extra.length === 0 && packageRef) {
+  if (html === hostHtml && index === hostIndexHtml && extra.length === 0 && packageRef) {
     return 'unchanged';
   }
   if (!packageRef) {
@@ -1176,11 +1397,14 @@ export async function saveToHost() {
   try {
     const result = await host.commit(packageRef, [
       { op: 'write', path: 'content.html', content: html },
+      { op: 'write', path: 'index.html', content: index },
       ...extra,
     ], revision);
     revision = result.revision;
     savedHtml = html;
+    savedIndexHtml = index;
     hostHtml = html;
+    hostIndexHtml = index;
     acceptCustom();
     if (extra.length) {
       await recordOperation('custom', extra.map((change) => change.path).join(', '), extra.map((change) => change.path).join(', '));
@@ -1292,6 +1516,26 @@ function acceptCustom() {
 export function subscribeSession(listener) {
   listeners.add(listener);
   return () => listeners.delete(listener);
+}
+
+/**
+ * Preview panel only. Fired when the applied package surfaces change
+ * (Apply, structural edits, view/mode switches, open/create), not on draft typing.
+ * @param {Function} listener Called when the preview document should rebuild.
+ * @returns {Function} Removes the listener.
+ */
+export function subscribePreview(listener) {
+  previewListeners.add(listener);
+  return () => previewListeners.delete(listener);
+}
+
+/**
+ * @returns {void}
+ */
+export function notifyPreview() {
+  for (const listener of previewListeners) {
+    listener();
+  }
 }
 
 /**

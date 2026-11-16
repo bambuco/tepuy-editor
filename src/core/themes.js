@@ -39,6 +39,97 @@ export async function readThemeLayout(id) {
 }
 
 /**
+ * Loads the presentation index.html of an installed theme.
+ * @param {string} id Theme identifier.
+ * @returns {Promise<string>} Theme index document.
+ */
+export async function readThemeIndex(id) {
+  const theme = findTheme(id);
+  if (!theme) {
+    throw new Error(`Theme "${id}" is not installed.`);
+  }
+  const url = new URL(`../themes/${theme.id}/index.html`, import.meta.url);
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`Theme "${id}" has no index layout.`);
+  }
+  return response.text();
+}
+
+/**
+ * Synchronous theme index for Node tests and seeding without fetch.
+ * @param {string} id Theme identifier.
+ * @returns {string} Minimal index HTML with metadata markers.
+ */
+export function themeIndexTemplate(id) {
+  const theme = findTheme(id) || findTheme('base');
+  const themeId = theme?.id || 'base';
+  const version = theme?.version || '1.0.0';
+  return `<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="tepuy-theme" content="${themeId}@${version}">
+  <title></title>
+</head>
+<body data-autoload="false" data-display-window="top">
+  <div id="body">
+    <h1 class="metadata" data-key="title"></h1>
+    <div id="content">
+      <p class="metadata" data-key="topic"></p>
+      <section class="metadata" data-key="description"></section>
+      <section class="metadata" data-key="objective"></section>
+      <p class="metadata" data-key="duration" data-unit="hours"></p>
+      <span class="metadata" data-key="participation"></span>
+      <span class="metadata" data-key="modality"></span>
+      <span class="metadata" data-key="synchronicity"></span>
+      <div id="play_scorm"></div>
+    </div>
+  </div>
+</body>
+</html>
+`;
+}
+
+/**
+ * Synchronous theme content.html shell (matches each theme content.html).
+ * @param {string} id Theme identifier.
+ * @returns {string} Theme content document used as serialize/preview shell.
+ */
+export function themeContentTemplate(id) {
+  const theme = findTheme(id) || findTheme('base');
+  const themeId = theme?.id || 'base';
+  const version = theme?.version || '1.0.0';
+  return `<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="tepuy-theme" content="${themeId}@${version}">
+  <meta name="tepuy-version" content="2.0">
+  <title>Tepuy</title>
+  <link rel="stylesheet" href="theme.css">
+</head>
+<body>
+  <nav class="main"></nav>
+  <nav class="globals"></nav>
+  <div id="tpy-measuring_progress"></div>
+  <nav class="secondary globals2"></nav>
+  <div id="tpy-subpages_menu"></div>
+  <div id="tpy-page_number"></div>
+  <div id="tpy-results_page"></div>
+  <div id="tpy-pg_credits" data-global="credits"></div>
+  <div id="tpy-pg_bibliography" data-global="library"></div>
+  <div id="tpy-auto_citation"></div>
+  <div id="global-pages"></div>
+  <main>
+    <h1 class="tpy-page-title"></h1>
+  </main>
+</body>
+</html>
+`;
+}
+
+/**
  * @param {string} html Theme content.html.
  * @param {string[]} positions Declared positions.
  * @param {typeof DOMParser} [Parser] DOM parser constructor.
