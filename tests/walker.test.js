@@ -60,6 +60,10 @@ test('walker reads #global-pages and rejects page priority under globals', () =>
   assert.equal(slotAccepts(globals, 'page'), false);
   assert.equal(slotAccepts(globals, 'subpage'), false);
   assert.equal(slotAccepts(globals, 'important'), true);
+  const entry = globals.children[0];
+  assert.equal(slotAccepts(entry, 'page'), false);
+  assert.equal(slotAccepts(entry, 'subpage'), false);
+  assert.equal(slotAccepts(entry, 'richtext'), true);
 });
 
 test('slotAccepts blocks a higher-priority child under a lower-priority parent', () => {

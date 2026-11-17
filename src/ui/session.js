@@ -302,7 +302,57 @@ export function currentControlTree() {
  * @returns {import('../core/parser.js').Node} Root used by the current selection.
  */
 export function selectedContentRoot() {
-  return selectionScope === 'global' ? currentGlobalPages() : currentDocument();
+  return treeFor(editingScope());
+}
+
+/**
+ * @returns {'main'|'global'} Tree that the open canvas is editing.
+ */
+function editingScope() {
+  return selectionScope === 'global' && selection?.path?.length ? 'global' : 'main';
+}
+
+/**
+ * @param {'main'|'global'} scope Content tree to read.
+ * @returns {import('../core/parser.js').Node} Main document or the global-pages container.
+ */
+function treeFor(scope) {
+  return scope === 'global' ? currentGlobalPages() : currentDocument();
+}
+
+/**
+ * @param {'main'|'global'} scope Tree that changed.
+ * @param {import('../core/parser.js').Node} next Replacement tree.
+ * @param {{keepSelection?: boolean, keepInsertion?: boolean, mainMenu?: import('../core/parser.js').Node}} [options] History options.
+ * @returns {void}
+ */
+function commitTree(scope, next, options = {}) {
+  if (scope === 'global') {
+    replaceDocument(currentDocument(), currentThemeId(), { ...options, globalPages: next });
+    return;
+  }
+  replaceDocument(next, currentThemeId(), options);
+}
+
+/**
+ * @param {number[]|null|undefined} path Candidate path.
+ * @param {number[]} prefix Ancestor path.
+ * @returns {boolean} Whether path is the prefix or a descendant.
+ */
+function pathInside(path, prefix) {
+  const target = path || [];
+  return prefix.length <= target.length && prefix.every((index, position) => target[position] === index);
+}
+
+/**
+ * @returns {number[]} Path of the page or global entry filling the canvas.
+ */
+function visibleRootPath() {
+  if (editingScope() === 'global') {
+    return [selection.path[0]];
+  }
+  const index = pageIndexById(activePageId);
+  return index >= 0 ? [index] : [];
 }
 
 /**
@@ -420,6 +470,14 @@ export function selectNode(item) {
       activePageId = page.attrs.id;
     }
   }
+  const rootPath = visibleRootPath();
+  if (!pathInside(insertion?.path, rootPath)) {
+    const root = treeFor(editingScope());
+    const parent = rootPath.length ? nodeAt(root, rootPath) : root;
+    if (hasSlot(parent)) {
+      insertion = { path: [...rootPath] };
+    }
+  }
   publish();
 }
 
@@ -436,10 +494,11 @@ function defaultInsertion(root) {
  * @returns {number[]} Parent path of the insertion area.
  */
 export function currentInsertionPath() {
-  const root = currentDocument();
+  const scope = editingScope();
+  const root = treeFor(scope);
   const parent = insertion ? (insertion.path.length ? nodeAt(root, insertion.path) : root) : null;
   if (!hasSlot(parent)) {
-    insertion = defaultInsertion(root);
+    insertion = scope === 'global' ? { path: visibleRootPath() } : defaultInsertion(root);
   }
   return [...insertion.path];
 }
@@ -450,7 +509,7 @@ export function currentInsertionPath() {
  * @returns {void}
  */
 export function selectSlot(path) {
-  const root = currentDocument();
+  const root = treeFor(editingScope());
   const parent = path?.length ? nodeAt(root, path) : root;
   if (!hasSlot(parent)) {
     return;
@@ -511,7 +570,7 @@ function appliedHtml(target) {
     const item = listMetadataNodes(currentIndexDocument().body).find((entry) => entry.key === target.key);
     return item ? normalizedHtml(readMetadataNode(item.node).value || '', 'rich') : null;
   }
-  const node = nodeAt(currentDocument(), target.path);
+  const node = nodeAt(treeFor(editingScope()), target.path);
   const region = htmlRegions(node).find((item) => item.id === target.regionId);
   return region ? regionHtml(node, region.id) : null;
 }
@@ -533,7 +592,8 @@ export function setHtmlDraft(target, html) {
     setIndexDraft(next);
     return;
   }
-  const node = nodeAt(currentDocument(), target.path);
+  const scope = editingScope();
+  const node = nodeAt(treeFor(scope), target.path);
   const region = htmlRegions(node).find((item) => item.id === target.regionId);
   if (!region) {
     return;
@@ -550,6 +610,7 @@ export function setHtmlDraft(target, html) {
   }
   draft = {
     kind: 'html',
+    scope,
     target: { scope: 'node', path: [...target.path], regionId: target.regionId },
     html: clean,
   };
@@ -618,14 +679,15 @@ export function setNodeDraft(path, fields) {
   if (draft && !(draft.kind === 'node' && samePath(draft.path, path))) {
     return;
   }
-  const applied = fieldValues(fieldsFor(nodeAt(currentDocument(), path)));
+  const scope = editingScope();
+  const applied = fieldValues(fieldsFor(nodeAt(treeFor(scope), path)));
   if (sameFields(fields, applied)) {
     if (draft?.kind === 'node' && samePath(draft.path, path)) {
       draft = null;
     }
     return;
   }
-  draft = { kind: 'node', path: [...path], fields: { ...fields } };
+  draft = { kind: 'node', scope, path: [...path], fields: { ...fields } };
 }
 
 /**
@@ -711,22 +773,24 @@ export function applyDraft() {
     return 'applied';
   }
   if (draft.kind === 'html') {
-    const next = applyRegionHtml(currentDocument(), draft.target.path, draft.target.regionId, draft.html || '');
+    const scope = draft.scope === 'global' ? 'global' : 'main';
+    const next = applyRegionHtml(treeFor(scope), draft.target.path, draft.target.regionId, draft.html || '');
     if (!next) {
       return 'invalid';
     }
-    replaceDocument(next, currentThemeId(), { keepSelection: true, keepInsertion: true });
+    commitTree(scope, next, { keepSelection: true, keepInsertion: true });
     return 'applied';
   }
-  const before = nodeAt(currentDocument(), draft.path);
+  const scope = draft.scope === 'global' ? 'global' : 'main';
+  const before = nodeAt(treeFor(scope), draft.path);
   const oldId = before?.type === 'page' ? before.attrs?.id : '';
-  const next = applyControlFields(currentDocument(), draft.path, draft.fields);
+  const next = applyControlFields(treeFor(scope), draft.path, draft.fields);
   if (!next) {
     return 'invalid';
   }
   let mainMenu = currentMainMenu();
   const after = nodeAt(next, draft.path);
-  if (before?.type === 'page' && after?.type === 'page') {
+  if (scope === 'main' && before?.type === 'page' && after?.type === 'page') {
     const newId = after.attrs?.id || '';
     if (oldId && newId && oldId !== newId) {
       mainMenu = rewriteMenuPageIds(mainMenu, oldId, newId);
@@ -734,7 +798,7 @@ export function applyDraft() {
       if (activePageId === oldId) {
         activePageId = newId;
       }
-      replaceDocument(rewritten, currentThemeId(), {
+      commitTree(scope, rewritten, {
         keepSelection: true,
         keepInsertion: true,
         mainMenu,
@@ -745,7 +809,7 @@ export function applyDraft() {
       mainMenu = setMenuItemTitle(mainMenu, newId, after.attrs.ptitle);
     }
   }
-  replaceDocument(next, currentThemeId(), {
+  commitTree(scope, next, {
     keepSelection: true,
     keepInsertion: true,
     mainMenu,
@@ -910,12 +974,13 @@ export function insertControl(id) {
   if (id === 'page') {
     return addPage() ? 'inserted' : 'nowhere';
   }
-  const placed = placeControl(currentDocument(), currentInsertionPath(), id);
+  const scope = editingScope();
+  const placed = placeControl(treeFor(scope), currentInsertionPath(), id);
   if (!placed) {
     return 'nowhere';
   }
-  replaceDocument(placed.tree, currentThemeId(), { keepInsertion: true });
-  selectNode({ path: placed.path });
+  commitTree(scope, placed.tree, { keepInsertion: true });
+  selectNode({ path: placed.path, scope });
   return 'inserted';
 }
 
@@ -927,12 +992,13 @@ export function duplicateSelection() {
   if (hasDraft()) {
     return false;
   }
-  const placed = duplicateAt(currentDocument(), currentSelectionPath());
+  const scope = editingScope();
+  const placed = duplicateAt(treeFor(scope), currentSelectionPath());
   if (!placed) {
     return false;
   }
-  replaceDocument(placed.tree, currentThemeId(), { keepInsertion: true });
-  selectNode({ path: placed.path });
+  commitTree(scope, placed.tree, { keepInsertion: true });
+  selectNode({ path: placed.path, scope });
   return true;
 }
 
@@ -946,15 +1012,17 @@ export function moveSelection(parentPath, index) {
   if (hasDraft()) {
     return 'pending';
   }
-  const placed = moveNode(currentDocument(), currentSelectionPath(), parentPath, index);
+  const scope = editingScope();
+  const root = treeFor(scope);
+  const placed = moveNode(root, currentSelectionPath(), parentPath, index);
   if (!placed) {
     return 'invalid';
   }
-  if (placed.tree === currentDocument()) {
+  if (placed.tree === root) {
     return 'same';
   }
-  replaceDocument(placed.tree, currentThemeId(), { keepSelection: true, keepInsertion: true });
-  selectNode({ path: placed.path });
+  commitTree(scope, placed.tree, { keepSelection: true, keepInsertion: true });
+  selectNode({ path: placed.path, scope });
   return 'moved';
 }
 
@@ -966,14 +1034,16 @@ export function deleteSelection() {
   if (hasDraft()) {
     return false;
   }
+  const scope = editingScope();
+  const root = treeFor(scope);
   const path = currentSelectionPath();
-  const selected = path ? nodeAt(currentDocument(), path) : null;
-  const removedPageId = selected?.type === 'page' ? selected.attrs?.id : '';
-  const next = deleteAt(currentDocument(), path);
+  const selected = path ? nodeAt(root, path) : null;
+  const removedPageId = scope === 'main' && selected?.type === 'page' ? selected.attrs?.id : '';
+  const next = deleteAt(root, path);
   if (!next) {
     return false;
   }
-  replaceDocument(next);
+  commitTree(scope, next);
   if (removedPageId && activePageId === removedPageId) {
     activePageId = pagesFirstId(currentMainMenu(), next);
   }

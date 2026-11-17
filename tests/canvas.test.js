@@ -13,11 +13,16 @@ import { readMetadata, serializeIndexDocument } from '../src/metadata/index-docu
 import {
   applyDraft,
   cancelDraft,
+  currentDocument,
+  currentGlobalPages,
   currentIndexDocument,
   currentInsertionPath,
+  currentThemeId,
   hasDraft,
   indexDraft,
   insertControl,
+  replaceDocument,
+  selectNode,
   setIndexDraft,
   subscribePreview,
 } from '../src/ui/session.js';
@@ -97,4 +102,39 @@ test('preview notify fires on apply, not on index draft typing', () => {
   assert.equal(applyDraft(), 'applied');
   assert.equal(hits, 1);
   stop();
+});
+
+/**
+ * @param {import('../src/core/parser.js').Node|null} node Content node.
+ * @param {string} tag Element name.
+ * @returns {number} Matching elements in the tree.
+ */
+function countTag(node, tag) {
+  if (!node) {
+    return 0;
+  }
+  const own = node.tag === tag ? 1 : 0;
+  return own + (node.children || []).reduce((sum, child) => sum + countTag(child, tag), 0);
+}
+
+test('inserting into a global writes that entry and leaves main unchanged', () => {
+  const mainParagraphs = countTag(currentDocument(), 'p');
+  replaceDocument(currentDocument(), currentThemeId(), {
+    globalPages: {
+      type: 'element',
+      tag: 'div',
+      attrs: { id: 'global-pages' },
+      children: [{
+        type: 'element',
+        tag: 'div',
+        attrs: { 'data-global': 'credits' },
+        children: [],
+      }],
+    },
+  });
+  selectNode({ scope: 'global', path: [0] });
+  assert.equal(insertControl('richtext'), 'inserted');
+  assert.equal(countTag(currentDocument(), 'p'), mainParagraphs);
+  assert.equal(countTag(currentGlobalPages(), 'p'), 1);
+  assert.equal(currentGlobalPages().children[0].attrs['data-global'], 'credits');
 });

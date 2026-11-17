@@ -40,6 +40,25 @@
   font-size: 18px;
 }
 
+.tepuy-structure-tree,
+.tepuy-structure-tree li {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.tepuy-structure-tree .edy-list__item {
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.tepuy-structure-label {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
 .tepuy-property {
   display: flex;
   flex-direction: column;
@@ -63,27 +82,6 @@
   width: 100%;
   box-sizing: border-box;
   color: var(--edy-text, #000);
-}
-
-.tepuy-menu-edit {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px solid var(--edy-border, #ddd);
-}
-
-.tepuy-menu-edit h3 {
-  margin: 0;
-  font-size: 0.9rem;
-}
-
-.tepuy-menu-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr auto;
-  gap: 4px;
-  align-items: end;
 }
 
 .tepuy-preview {
@@ -146,7 +144,7 @@
 .tepuy-canvas__scroll {
   flex: 1;
   overflow: auto;
-  padding: 16px 20px 48px;
+  padding: 8px;
 }
 
 .tepuy-index-actions {
@@ -185,10 +183,24 @@
 
 .tepuy-block {
   position: relative;
-  margin: 10px 0;
-  padding: 12px 10px 8px;
+  margin: 0;
+  padding: 0;
   border: 1px solid transparent;
-  background: rgba(255, 255, 255, .72);
+  background: transparent;
+}
+
+.tepuy-block--frame {
+  margin: 8px 0;
+  padding: 8px 12px 12px;
+  border: 1px solid #d5dde3;
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(36, 50, 58, .12);
+}
+
+.tepuy-frame__title {
+  margin: 0 0 8px;
+  font-size: .8rem;
+  font-weight: 700;
 }
 
 .tepuy-block.is-selected {
@@ -262,29 +274,6 @@
   font-weight: 600;
 }
 
-.tepuy-main-menu {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 16px;
-  padding: 8px 0;
-  border-bottom: 1px solid #d5dde3;
-}
-
-.tepuy-main-menu button {
-  font: inherit;
-  border: 0;
-  background: transparent;
-  color: inherit;
-  cursor: pointer;
-  padding: 4px 8px;
-}
-
-.tepuy-main-menu button.is-active {
-  border-bottom: 2px solid var(--tepuy-color-important, #e2793d);
-  font-weight: 700;
-}
-
 .tepuy-drop {
   height: 8px;
   margin: 2px 0;
@@ -326,4 +315,8 @@
 .tepuy-canvas img,
 .tepuy-canvas video {
   max-width: 100%;
+}
+
+.tepuy-panel > .edy-list {
+  padding-left: 0;
 }

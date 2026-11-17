@@ -16,7 +16,7 @@ import {
 import { getControl, matchableControls } from '../controls/registry.js';
 import { nodeAt } from '../core/edit.js';
 import { sanitizeHtml } from '../core/html.js';
-import { extractMainMenuItems, themeHasMainMenu } from '../core/menu.js';
+import { extractMainMenuItems } from '../core/menu.js';
 import { findTheme } from '../core/themes.js';
 import { t } from '../i18n/messages.js';
 import {
@@ -30,11 +30,13 @@ import {
   cancelDraft,
   currentDocument,
   currentEditor,
+  currentGlobalPages,
   currentIndexDocument,
   currentInsertionPath,
   currentMainMenu,
   currentPageId,
   currentSelectionPath,
+  currentSelectionScope,
   currentThemeId,
   deleteSelection,
   draftKind,
@@ -113,6 +115,13 @@ function nodeName(node) {
   }
   if (kind === 'tabs') {
     return t('menu.control.tabs');
+  }
+  if (node.attrs?.['data-global']) {
+    const key = node.attrs['data-global'];
+    if (key === 'credits' || key === 'library') {
+      return t(`settings.${key}`);
+    }
+    return key;
   }
   return plainText(node) || node.tag || t('canvas.unknown');
 }
@@ -254,12 +263,16 @@ function focusKey(target) {
 
 /**
  * Builds the editing surface for one package document.
- * @param {'content'|'index'} mode Canvas document.
+ * @param {'content'|'index'|'global'} mode Canvas document.
  * @param {Object} context Edy extension context.
+ * @param {{documentId?: string, globalKey?: string}} [options] Pinned global document.
  * @returns {{element: HTMLElement, dispose: Function}} Editor contribution.
  */
-export function renderCanvas(mode, context) {
-  const viewId = mode === 'index' ? 'index-html' : 'content-html';
+export function renderCanvas(mode, context, options = {}) {
+  const globalKey = options.globalKey || '';
+  const breadcrumb = mode === 'global'
+    ? { type: 'document', id: options.documentId }
+    : { type: 'view', id: mode === 'index' ? 'index-html' : 'content-html' };
   setPackageView(mode === 'index' ? 'presentation' : 'content');
   const section = document.createElement('section');
   section.className = 'tepuy-canvas';
@@ -304,13 +317,77 @@ export function renderCanvas(mode, context) {
   let editorKey = '';
 
   /**
+   * @returns {import('../core/parser.js').Node} Tree this canvas edits.
+   */
+  function canvasRoot() {
+    return mode === 'global' ? currentGlobalPages() : currentDocument();
+  }
+
+  /**
+   * @param {number[]|null|undefined} path Candidate path.
+   * @param {number[]} prefix Ancestor path.
+   * @returns {boolean} Whether path is the prefix or a descendant.
+   */
+  function pathInside(path, prefix) {
+    const target = path || [];
+    return prefix.length <= target.length && prefix.every((index, position) => target[position] === index);
+  }
+
+  /**
+   * @returns {number[]|null} Selection that belongs to this canvas.
+   */
+  function selectionPath() {
+    if (mode === 'index') {
+      return null;
+    }
+    const path = currentSelectionPath();
+    if (mode === 'global') {
+      const surface = visibleSurface();
+      if (currentSelectionScope() !== 'global' || !path || !surface || !pathInside(path, surface.path)) {
+        return null;
+      }
+      return path;
+    }
+    if (currentSelectionScope() === 'global') {
+      return null;
+    }
+    return path;
+  }
+
+  /**
+   * @returns {number[]} Insertion parent shown on this canvas.
+   */
+  function insertionPath() {
+    if (mode === 'global') {
+      if (currentSelectionScope() === 'global') {
+        return currentInsertionPath();
+      }
+      return visibleSurface()?.path || [];
+    }
+    if (currentSelectionScope() === 'global') {
+      const index = pageIndexById(currentPageId());
+      return index >= 0 ? [index] : [];
+    }
+    return currentInsertionPath();
+  }
+
+  /**
+   * @param {number[]} path Control path on the visible page or global.
+   * @returns {void}
+   */
+  function chooseNode(path) {
+    const surface = visibleSurface();
+    selectNode({ path, scope: surface?.scope || 'main' });
+  }
+
+  /**
    * @param {number[]} path Control path.
    * @returns {void}
    */
   function editNode(path) {
-    const node = nodeAt(currentDocument(), path);
+    chooseNode(path);
+    const node = nodeAt(canvasRoot(), path);
     const region = htmlRegions(node)[0];
-    selectNode({ path });
     if (!region) {
       return;
     }
@@ -328,8 +405,8 @@ export function renderCanvas(mode, context) {
       notify(t('menu.notice.pending'));
       return;
     }
-    selectNode({ path });
-    const node = nodeAt(currentDocument(), path);
+    chooseNode(path);
+    const node = nodeAt(canvasRoot(), path);
     if (hasNestedControls(node)) {
       const accepted = await confirmDialog({
         title: t('canvas.delete-title'),
@@ -367,14 +444,15 @@ export function renderCanvas(mode, context) {
    * @returns {HTMLButtonElement} Dotted insertion area.
    */
   function slotButton(parentPath) {
-    const parent = parentPath.length ? nodeAt(currentDocument(), parentPath) : currentDocument();
+    const root = canvasRoot();
+    const parent = parentPath.length ? nodeAt(root, parentPath) : root;
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'tepuy-slot';
     button.dataset.dropParent = parentPath.join('.');
     button.dataset.dropIndex = String((parent?.children || []).length);
-    button.classList.toggle('is-target', samePath(currentInsertionPath(), parentPath));
-    const isPageSlot = parent?.tag === 'main' || parentPath.length === 0;
+    button.classList.toggle('is-target', samePath(insertionPath(), parentPath));
+    const isPageSlot = parent?.tag === 'main';
     button.textContent = isPageSlot ? t('canvas.slot-page') : t('canvas.slot');
     if (isPageSlot) {
       button.classList.add('tepuy-slot--page', 'is-target');
@@ -406,29 +484,27 @@ export function renderCanvas(mode, context) {
   }
 
   /**
-   * @returns {HTMLElement|null} Theme main menu chrome.
+   * @returns {{node: import('../core/parser.js').Node, path: number[], scope: 'main'|'global'}|null} Page or global entry filling the canvas.
    */
-  function renderMainMenu() {
-    if (!themeHasMainMenu(currentThemeId())) {
+  function visibleSurface() {
+    if (mode === 'global') {
+      const children = currentGlobalPages().children || [];
+      const index = children.findIndex((node, position) => (node.attrs?.['data-global'] || String(position)) === globalKey);
+      const node = index >= 0 ? children[index] : null;
+      if (!node) {
+        return null;
+      }
+      return { node, path: [index], scope: 'global' };
+    }
+    const index = pageIndexById(currentPageId());
+    if (index < 0) {
       return null;
     }
-    const nav = document.createElement('nav');
-    nav.className = 'tepuy-main-menu main';
-    nav.dataset.tepuyMenu = 'main';
-    const active = currentPageId();
-    for (const item of extractMainMenuItems(currentMainMenu())) {
-      const button = document.createElement('button');
-      button.type = 'button';
-      button.textContent = item.title || item.id;
-      button.dataset.page = item.id;
-      button.classList.toggle('is-active', item.id === active);
-      button.addEventListener('click', (event) => {
-        event.stopPropagation();
-        setCurrentPageId(item.id);
-      });
-      nav.append(button);
+    const node = nodeAt(currentDocument(), [index]);
+    if (!node) {
+      return null;
     }
-    return nav;
+    return { node, path: [index], scope: 'main' };
   }
 
   /**
@@ -444,8 +520,8 @@ export function renderCanvas(mode, context) {
     appendFragment(zone, regionHtml(owner, region.id), region.mode);
     zone.addEventListener('click', (event) => {
       event.stopPropagation();
-      if (!samePath(currentSelectionPath(), ownerPath)) {
-        selectNode({ path: ownerPath });
+      if (!samePath(selectionPath(), ownerPath)) {
+        chooseNode(ownerPath);
         return;
       }
       if (focusHtml({ scope: 'node', path: ownerPath, regionId: region.id }) === 'pending') {
@@ -598,9 +674,13 @@ export function renderCanvas(mode, context) {
     const editing = blockIsEditing(focus, path);
     const block = document.createElement('article');
     block.className = 'tepuy-block';
-    block.classList.toggle('is-selected', samePath(currentSelectionPath(), path));
+    block.classList.toggle('is-selected', samePath(selectionPath(), path));
     block.classList.toggle('is-editing', editing);
     block.dataset.path = path.join('.');
+    const framed = node.type === 'subpage';
+    if (framed) {
+      block.classList.add('tepuy-block--frame');
+    }
     const bar = document.createElement('div');
     bar.className = 'tepuy-block__chrome';
     const drag = actionButton('⠿', () => {});
@@ -622,13 +702,20 @@ export function renderCanvas(mode, context) {
     const body = document.createElement('div');
     body.className = 'tepuy-block__body';
     fillBody(node, path, body);
-    block.append(bar, body);
+    block.append(bar);
+    if (framed) {
+      const caption = document.createElement('p');
+      caption.className = 'tepuy-frame__title';
+      caption.textContent = node.attrs?.['data-title'] || t('menu.control.subpage');
+      block.append(caption);
+    }
+    block.append(body);
     block.addEventListener('click', (event) => {
       if (event.target instanceof Element && event.target.closest('button, .tepuy-html, .tepuy-slot')) {
         return;
       }
       event.stopPropagation();
-      selectNode({ path });
+      chooseNode(path);
     });
     return block;
   }
@@ -799,8 +886,8 @@ export function renderCanvas(mode, context) {
    * @returns {void}
    */
   function paintChrome() {
-    const selected = currentSelectionPath();
-    const slot = currentInsertionPath();
+    const selected = selectionPath();
+    const slot = insertionPath();
     for (const block of scroller.querySelectorAll('.tepuy-block')) {
       block.classList.toggle('is-selected', samePath(decodePath(block.dataset.path || ''), selected));
     }
@@ -845,24 +932,36 @@ export function renderCanvas(mode, context) {
       });
     }
     else {
-      items.push({
-        id: 'content',
-        label: t('canvas.root.content'),
-        icon: 'file',
-        onSelect: () => selectNode(null),
-      });
-      const path = currentSelectionPath() || [];
-      const walked = [];
-      for (const index of path) {
-        walked.push(index);
-        const target = [...walked];
-        const node = nodeAt(currentDocument(), target);
+      const surface = visibleSurface();
+      if (!surface) {
         items.push({
-          id: target.join('.'),
-          label: nodeName(node),
-          icon: crumbIcon(node),
-          onSelect: () => selectNode({ path: target }),
+          id: 'content',
+          label: t('canvas.root.content'),
+          icon: 'file',
+          onSelect: () => selectNode(null),
         });
+      }
+      else {
+        const root = surface.scope === 'global' ? currentGlobalPages() : currentDocument();
+        items.push({
+          id: surface.path.join('.'),
+          label: nodeName(surface.node),
+          icon: crumbIcon(surface.node),
+          onSelect: () => selectNode({ path: surface.path, scope: surface.scope }),
+        });
+        const path = selectionPath() || [];
+        const walked = [...surface.path];
+        for (let position = surface.path.length; position < path.length; position += 1) {
+          walked.push(path[position]);
+          const target = [...walked];
+          const node = nodeAt(root, target);
+          items.push({
+            id: target.join('.'),
+            label: nodeName(node),
+            icon: crumbIcon(node),
+            onSelect: () => selectNode({ path: target, scope: surface.scope }),
+          });
+        }
       }
     }
     const signature = items.map((item) => `${item.id}\0${item.label}\0${item.icon || ''}`).join('\n');
@@ -870,7 +969,7 @@ export function renderCanvas(mode, context) {
       return;
     }
     crumbSignature = signature;
-    context.breadcrumbs.set({ type: 'view', id: viewId }, items);
+    context.breadcrumbs.set(breadcrumb, items);
   }
 
   /**
@@ -887,7 +986,7 @@ export function renderCanvas(mode, context) {
       value = item ? readMetadataNode(item.node).value || '' : '';
     }
     else {
-      const node = nodeAt(currentDocument(), target.path);
+      const node = nodeAt(canvasRoot(), target.path);
       const region = htmlRegions(node).find((item) => item.id === target.regionId);
       modeName = region?.mode || 'inline';
       value = regionHtml(node, target.regionId);
@@ -943,16 +1042,9 @@ export function renderCanvas(mode, context) {
     }
     else {
       scroller.replaceChildren();
-      const root = currentDocument();
-      const menu = renderMainMenu();
-      if (menu) {
-        scroller.append(menu);
-      }
-      const pageId = currentPageId();
-      const index = pageId ? pageIndexById(pageId) : -1;
-      if (index >= 0) {
-        const page = root.children[index];
-        scroller.append(renderBlock(page, [index]));
+      const surface = visibleSurface();
+      if (surface) {
+        renderChildren(surface.node, surface.path, scroller);
       }
       else {
         scroller.append(slotButton([]));
@@ -981,8 +1073,8 @@ export function renderCanvas(mode, context) {
     event.preventDefault();
     const path = decodePath(handle.dataset.dragPath || '');
     drag = { path, pointerId: event.pointerId };
-    if (!samePath(currentSelectionPath(), path)) {
-      selectNode({ path });
+    if (!samePath(selectionPath(), path)) {
+      chooseNode(path);
     }
     handle.setPointerCapture?.(event.pointerId);
   });
@@ -1044,7 +1136,7 @@ export function renderCanvas(mode, context) {
     if (!event.altKey || (event.key !== 'ArrowUp' && event.key !== 'ArrowDown')) {
       return;
     }
-    const path = currentSelectionPath();
+    const path = selectionPath();
     if (!path?.length) {
       return;
     }
@@ -1075,11 +1167,11 @@ export function renderCanvas(mode, context) {
       indexForm = null;
       crumbSignature = '';
       try {
-        context.breadcrumbs.clear({ type: 'view', id: viewId });
+        context.breadcrumbs.clear(breadcrumb);
       }
       catch (error) {
         // View removal during extension teardown already drops the path, and clear then throws.
-        if (!/disposed/i.test(String(error?.message || error))) {
+        if (!/disposed|not registered/i.test(String(error?.message || error))) {
           throw error;
         }
       }

@@ -17,7 +17,6 @@ import {
   suggestedPageId,
 } from '../controls/library.js';
 import { nodeAt } from '../core/edit.js';
-import { extractMainMenuItems, themeHasMainMenu } from '../core/menu.js';
 import { serializePackage, settingsFields } from '../core/package.js';
 import { buildPreviewHtml } from '../core/preview.js';
 import { findTheme } from '../core/themes.js';
@@ -27,7 +26,6 @@ import { t } from '../i18n/messages.js';
 import { renderCanvas } from './canvas.js';
 import { CONTROL_GROUPS, controlLabel, groupLabel } from './catalog.js';
 import {
-  addOrphanMenuItem,
   auditEntries,
   auditNeedsLoad,
   currentControlTree,
@@ -39,9 +37,11 @@ import {
   currentPackageName,
   currentPackageRef,
   currentPackageView,
+  currentPageId,
   currentPreviewMode,
   currentSelection,
   currentSelectionPath,
+  currentSelectionScope,
   currentSettings,
   currentThemeId,
   customValue,
@@ -52,17 +52,18 @@ import {
   hostPackages,
   openHostPackage,
   packageSettingsOpen,
+  pageIndexById,
   readCustom,
   rememberCustom,
   refreshLog,
   selectNode,
   selectedContentRoot,
   setNodeDraft,
+  setPackageView,
   setSettingsDraft,
   subscribePreview,
   subscribeSession,
   updateCustom,
-  updateMenuItem,
   uploadHostFile,
 } from './session.js';
 
@@ -130,6 +131,13 @@ function nodeLabel(node) {
   if (node.type === 'link') {
     return nodeText(node) || t('canvas.link');
   }
+  if (node.attrs?.['data-global']) {
+    const key = node.attrs['data-global'];
+    if (key === 'credits' || key === 'library') {
+      return t(`settings.${key}`);
+    }
+    return key;
+  }
   return node.tag || node.type;
 }
 
@@ -146,14 +154,48 @@ function instanceLabel(instance) {
 }
 
 /**
+ * @param {string} label Raw structure label.
+ * @returns {string} Single-line label of at most 100 characters.
+ */
+function contentTreeLabel(label) {
+  const text = String(label || '').replace(/\s+/g, ' ').trim();
+  if (text.length <= 100) {
+    return text;
+  }
+  return `${text.slice(0, 99)}…`;
+}
+
+/**
+ * Keeps each content-tree label on one line and exposes the same text on hover.
+ * @param {HTMLElement} list Structure list.
+ * @returns {void}
+ */
+function clipContentLabels(list) {
+  list.classList.add('tepuy-structure-tree');
+  for (const button of list.querySelectorAll('.edy-list__item')) {
+    const text = [...button.childNodes].find((node) => node.nodeType === Node.TEXT_NODE);
+    if (!text) {
+      continue;
+    }
+    const span = document.createElement('span');
+    span.className = 'tepuy-structure-label';
+    span.textContent = text.textContent;
+    button.title = text.textContent;
+    text.replaceWith(span);
+  }
+}
+
+/**
  * @param {import('../controls/walker.js').ControlInstance[]} instances Walked controls.
  * @param {'main'|'global'} scope Selection root.
- * @returns {Array<{label: string, path: number[], scope: string, children?: Array}>} Tree rows.
+ * @returns {Array<{label: string, icon?: string, path: number[], scope: string, children?: Array}>} Tree rows.
  */
 function instanceTreeItems(instances, scope) {
   return (instances || []).map((instance) => {
+    const label = instanceLabel(instance);
     const item = {
-      label: instanceLabel(instance),
+      label: scope === 'main' ? contentTreeLabel(label) : label,
+      icon: instance.icon,
       path: [...instance.path],
       scope,
     };
@@ -164,21 +206,155 @@ function instanceTreeItems(instances, scope) {
   });
 }
 
+/** @type {string} Last editor tab, restored after reload. */
+const EDITOR_TAB_KEY = 'tepuy.editorTab';
+
+/** @type {boolean} */
+let persistEditorTab = false;
+
+/** @type {EventTarget|null} */
+let tabContainer = null;
+
+/** @type {EventListener|null} */
+let tabListener = null;
+
 /**
- * @returns {Array<{label: string, path: number[], scope?: string, children?: Array}>} Structure rows.
+ * @param {string} id Stored or public tab id.
+ * @param {string} extensionId Extension prefix used by Edy.
+ * @returns {string} Id without the extension prefix.
  */
-function structureTreeItems() {
-  const { pages, globals } = currentControlTree();
-  const items = instanceTreeItems(pages, 'main');
-  if (globals.length) {
-    items.push({
-      label: t('menu.control.global-pages'),
-      path: [],
-      scope: 'global',
-      children: instanceTreeItems(globals, 'global'),
-    });
+function localTabId(id, extensionId) {
+  const prefix = `${extensionId}:`;
+  return id.startsWith(prefix) ? id.slice(prefix.length) : id;
+}
+
+/**
+ * @returns {string} Saved editor tab, or an empty string.
+ */
+function readEditorTab() {
+  try {
+    return globalThis.localStorage?.getItem(EDITOR_TAB_KEY) || '';
   }
-  return items;
+  catch {
+    return '';
+  }
+}
+
+/**
+ * @param {string} id Editor view or global document id.
+ * @returns {void}
+ */
+function writeEditorTab(id) {
+  try {
+    globalThis.localStorage?.setItem(EDITOR_TAB_KEY, id);
+  }
+  catch {
+    // Private mode or a test environment without storage.
+  }
+}
+
+/**
+ * Aligns the preview and the properties selection with the active editor tab.
+ * @param {{viewId?: string|null, documentId?: string|null}} detail Active tab.
+ * @param {string} extensionId Extension prefix used by Edy.
+ * @param {boolean} persist Whether this change should be restored after reload.
+ * @returns {void}
+ */
+function applyEditorTab(detail, extensionId, persist) {
+  const id = localTabId(detail.documentId || detail.viewId || '', extensionId);
+  if (!id) {
+    return;
+  }
+  if (persist) {
+    writeEditorTab(id);
+  }
+  const preview = id === 'index-html' ? 'presentation' : 'content';
+  if (currentPackageView() !== preview) {
+    setPackageView(preview);
+  }
+  if (id === 'index-html') {
+    if (currentSelectionScope() === 'global') {
+      selectNode(null);
+    }
+    return;
+  }
+  if (id === 'content-html') {
+    if (currentSelectionScope() !== 'global') {
+      return;
+    }
+    const index = pageIndexById(currentPageId());
+    selectNode(index >= 0 ? { path: [index], scope: 'main' } : null);
+    return;
+  }
+  if (!id.startsWith('global:')) {
+    return;
+  }
+  const key = id.slice('global:'.length);
+  const children = currentGlobalPages().children || [];
+  const index = children.findIndex((node, position) => (node.attrs?.['data-global'] || String(position)) === key);
+  if (index < 0) {
+    return;
+  }
+  const path = currentSelectionPath();
+  if (currentSelectionScope() === 'global' && path?.[0] === index) {
+    return;
+  }
+  selectNode({ path: [index], scope: 'global' });
+}
+
+/**
+ * Opens one global entry in a closable editor tab.
+ * @param {Object} context Edy extension context.
+ * @param {{path?: number[]}} item Selected global row.
+ * @returns {void}
+ */
+function openGlobalEntry(context, item) {
+  const path = item?.path || [];
+  if (!path.length) {
+    return;
+  }
+  const children = currentGlobalPages().children || [];
+  const root = children[path[0]];
+  if (!root) {
+    return;
+  }
+  const key = root.attrs?.['data-global'] || String(path[0]);
+  const id = `global:${key}`;
+  const publicId = `${context.extensionId}:${id}`;
+  selectNode({ path: [...path], scope: 'global' });
+  const editor = currentEditor();
+  if (editor?.documents.get(publicId)) {
+    editor.workbench.openDocument(publicId);
+    return;
+  }
+  const entry = currentControlTree().globals.find((instance) => instance.path[0] === path[0]);
+  context.documents.open(id, {
+    title: entry ? instanceLabel(entry) : key,
+    render: () => renderCanvas('global', context, { documentId: id, globalKey: key }),
+  });
+}
+
+/**
+ * Opens the editor tab saved from the previous visit when it still exists.
+ * @param {Object} context Edy extension context.
+ * @returns {void}
+ */
+function restoreEditorTab(context) {
+  const saved = readEditorTab();
+  if (saved === 'content-html') {
+    context.views.open('content-html');
+    return;
+  }
+  if (saved.startsWith('global:')) {
+    const key = saved.slice('global:'.length);
+    const children = currentGlobalPages().children || [];
+    const index = children.findIndex((node, position) => (node.attrs?.['data-global'] || String(position)) === key);
+    if (index >= 0) {
+      openGlobalEntry(context, { path: [index] });
+      return;
+    }
+  }
+  context.views.open('index-html');
 }
 
 /**
@@ -192,49 +368,6 @@ function readFields(form, specs) {
     values[spec.name] = form.querySelector(`[data-field="${spec.name}"]`)?.value ?? '';
   }
   return values;
-}
-
-/**
- * @returns {HTMLElement} Minimal editor for nav.main [data-page] items.
- */
-function renderMenuEditor() {
-  const wrap = document.createElement('div');
-  wrap.className = 'tepuy-menu-edit';
-  const heading = document.createElement('h3');
-  heading.textContent = t('panel.main-menu');
-  wrap.append(heading);
-  const items = extractMainMenuItems(currentMainMenu());
-  for (const item of items) {
-    const row = document.createElement('div');
-    row.className = 'tepuy-menu-row';
-    const titleLabel = document.createElement('label');
-    titleLabel.textContent = t('field.title');
-    const titleInput = document.createElement('input');
-    titleInput.value = item.title;
-    titleLabel.append(titleInput);
-    const idLabel = document.createElement('label');
-    idLabel.textContent = t('field.page');
-    const idInput = document.createElement('input');
-    idInput.value = item.id;
-    idLabel.append(idInput);
-    const save = document.createElement('button');
-    save.type = 'button';
-    save.textContent = t('panel.menu-apply');
-    save.addEventListener('click', () => {
-      updateMenuItem(item.id, { title: titleInput.value, pageId: idInput.value.trim() });
-    });
-    row.append(titleLabel, idLabel, save);
-    wrap.append(row);
-  }
-  const add = document.createElement('button');
-  add.type = 'button';
-  add.textContent = t('panel.menu-add');
-  add.addEventListener('click', () => {
-    const pageId = suggestedPageId('Página', new Set(items.map((item) => item.id)));
-    addOrphanMenuItem({ pageId, title: t('menu.control.page') });
-  });
-  wrap.append(add);
-  return wrap;
 }
 
 /**
@@ -454,18 +587,52 @@ function activityFace(id) {
  * @returns {void}
  */
 export function registerActivity(context) {
+  persistEditorTab = false;
+  tabContainer?.removeEventListener('edy-editor-tab', tabListener);
+  tabListener = (event) => {
+    applyEditorTab(event.detail || {}, context.extensionId, persistEditorTab);
+  };
+  tabContainer = currentEditor()?.container || null;
+  tabContainer?.addEventListener('edy-editor-tab', tabListener);
+
   context.views.register('structure', {
     ...activityFace('structure'),
     location: 'primary',
-    render: () => liveView((section) => {
-      const status = document.createElement('p');
-      status.textContent = currentSelection() || t('panel.select-page');
-      const list = createList(structureTreeItems(), {
-        tree: true,
-        onSelect: (item) => selectNode(item),
-      });
-      section.replaceChildren(list, status);
-    }),
+    sections: [
+      {
+        id: 'content',
+        title: t('menu.view.content'),
+        render: () => liveView((section) => {
+          const pages = currentControlTree().pages;
+          const list = createList(instanceTreeItems(pages, 'main'), {
+            tree: true,
+            onSelect: (item) => {
+              selectNode(item);
+              context.views.open('content-html');
+            },
+          });
+          clipContentLabels(list);
+          section.replaceChildren(list);
+        }),
+      },
+      {
+        id: 'globals',
+        title: t('menu.control.global-pages'),
+        render: () => liveView((section) => {
+          const globals = currentControlTree().globals;
+          if (!globals.length) {
+            const empty = document.createElement('p');
+            empty.textContent = t('panel.no-globals');
+            section.replaceChildren(empty);
+            return;
+          }
+          section.replaceChildren(createList(instanceTreeItems(globals, 'global'), {
+            tree: true,
+            onSelect: (item) => openGlobalEntry(context, item),
+          }));
+        }),
+      },
+    ],
   });
 
   context.views.register('files', {
@@ -651,9 +818,6 @@ export function registerActivity(context) {
         }
         parts.push(form);
       }
-      if (themeHasMainMenu(currentThemeId())) {
-        parts.push(renderMenuEditor());
-      }
       section.replaceChildren(...parts);
     }),
   });
@@ -703,15 +867,16 @@ export function registerActivity(context) {
     }),
   });
 
-  context.views.register('content-html', {
-    title: 'content.html',
-    location: 'editor',
-    render: () => renderCanvas('content', context),
-  });
   context.views.register('index-html', {
-    title: 'index.html',
+    title: t('menu.view.presentation'),
     location: 'editor',
     render: () => renderCanvas('index', context),
   });
-  context.views.open('content-html');
+  context.views.register('content-html', {
+    title: t('menu.view.content'),
+    location: 'editor',
+    render: () => renderCanvas('content', context),
+  });
+  persistEditorTab = true;
+  restoreEditorTab(context);
 }

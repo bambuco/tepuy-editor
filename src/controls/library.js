@@ -196,7 +196,7 @@ export function hasSlot(node) {
   if (node.tag === 'main' || node.tag === 'dd') {
     return true;
   }
-  if (node.attrs?.id === GLOBAL_PAGES_ID) {
+  if (node.attrs?.id === GLOBAL_PAGES_ID || node.attrs?.['data-global']) {
     return true;
   }
   if (node.type === 'page' || node.type === 'subpage') {
