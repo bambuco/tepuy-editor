@@ -119,6 +119,16 @@ export function createHostClient({ url, token = DEV_TOKEN, fetchImpl } = {}) {
     return data;
   }
 
+  /**
+   * @param {string} ref Package reference.
+   * @param {string} path Package path.
+   * @returns {Promise<{encoding: string, content: string}>} Text or base64 payload.
+   */
+  async function readEncoded(ref, path) {
+    const data = await request('read', { query: { ref, path } });
+    return { encoding: data.encoding || 'utf-8', content: data.content || '' };
+  }
+
   return {
     capabilities: () => request('capabilities'),
     getUser: () => request('getUser'),
@@ -133,12 +143,13 @@ export function createHostClient({ url, token = DEV_TOKEN, fetchImpl } = {}) {
       return data.files || [];
     },
     async read(ref, path) {
-      const data = await request('read', { query: { ref, path } });
+      const data = await readEncoded(ref, path);
       if (data.encoding === 'base64') {
         throw new HostError('invalid', 'Binary files are not opened as text.');
       }
       return data.content;
     },
+    readEncoded,
     commit: (ref, changes, baseRevision) => request('commit', {
       method: 'POST',
       body: { ref, changes, baseRevision },

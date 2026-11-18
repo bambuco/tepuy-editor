@@ -19,7 +19,7 @@ import {
 import { nodeAt } from '../core/edit.js';
 import { serializePackage, settingsFields } from '../core/package.js';
 import { buildPreviewHtml } from '../core/preview.js';
-import { findTheme } from '../core/themes.js';
+import { findTheme, themeAssetBase, themeStylesheet } from '../core/themes.js';
 import { serializeIndexDocument } from '../metadata/index-document.js';
 import { filterLog } from '../core/host.js';
 import { t } from '../i18n/messages.js';
@@ -43,8 +43,10 @@ import {
   currentSelectionPath,
   currentSelectionScope,
   currentSettings,
+  contentDataUrl,
   currentThemeId,
   customValue,
+  ensurePreviewSources,
   draftFields,
   draftKind,
   hasDraft,
@@ -62,6 +64,7 @@ import {
   setPackageView,
   setSettingsDraft,
   subscribePreview,
+  themeResourceAssignments,
   subscribeSession,
   updateCustom,
   uploadHostFile,
@@ -845,6 +848,16 @@ export function registerActivity(context) {
       frame.setAttribute('sandbox', '');
       const index = currentIndexDocument();
       const themeId = currentThemeId();
+      ensurePreviewSources();
+      const assignments = themeResourceAssignments();
+      /** @type {Object<string, string>} */
+      const contentUrls = {};
+      for (const path of Object.values(assignments)) {
+        const url = contentDataUrl(path);
+        if (url) {
+          contentUrls[path] = url;
+        }
+      }
       frame.srcdoc = buildPreviewHtml({
         variables: theme?.variables || {},
         mobile,
@@ -862,6 +875,13 @@ export function registerActivity(context) {
           globalPages: currentGlobalPages(),
           references: collectReferences(documentNode),
         }),
+        themeCss: themeStylesheet(themeId),
+        resources: theme?.resources || [],
+        assignments,
+        assetBase: themeAssetBase(themeId),
+        contentUrls,
+        desktopCss: customValue('custom/default.css') || '',
+        mobileCss: customValue('custom/mobile.css') || '',
       });
       section.replaceChildren(frame);
     }),

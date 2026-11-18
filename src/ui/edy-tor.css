@@ -291,12 +291,6 @@
   font-weight: 700;
 }
 
-.tepuy-locked {
-  padding: 12px;
-  border: 1px solid #d5dde3;
-  background: #fff;
-}
-
 .tepuy-tabs {
   display: flex;
   flex-direction: column;

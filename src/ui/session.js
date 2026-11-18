@@ -1181,6 +1181,126 @@ export function rememberCustom(path, original) {
 export function updateCustom(path, value) {
   const current = customDrafts.get(path) || { original: '', value: '' };
   customDrafts.set(path, { original: current.original, value });
+  if (path === 'custom/default.css' || path === 'custom/mobile.css') {
+    notifyPreview();
+  }
+}
+
+/** @type {Object<string, string>} Resource name to a content/ path. */
+let themeResources = {};
+
+/** @type {Map<string, string>} content/ path to a data URL, including empty when missing. */
+const contentDataUrls = new Map();
+
+/** @type {Set<string>} content/ paths currently being read. */
+const contentDataLoading = new Set();
+
+/**
+ * @returns {Object<string, string>} Assigned theme resources.
+ */
+export function themeResourceAssignments() {
+  return { ...themeResources };
+}
+
+/**
+ * @param {string} name Resource name from the theme.
+ * @param {string} contentPath content/ file, or empty to clear the assignment.
+ * @returns {void}
+ */
+export function setThemeResource(name, contentPath) {
+  const key = String(name || '').trim();
+  if (!key) {
+    return;
+  }
+  if (!contentPath) {
+    delete themeResources[key];
+  }
+  else {
+    themeResources[key] = String(contentPath);
+  }
+  notifyPreview();
+}
+
+/**
+ * @param {string} path content/ path.
+ * @returns {string} Cached data URL, or empty when it is not ready.
+ */
+export function contentDataUrl(path) {
+  return contentDataUrls.get(path) || '';
+}
+
+/**
+ * @param {string} path content/ path.
+ * @returns {string} MIME type for a data URL.
+ */
+function contentMime(path) {
+  const extension = String(path || '').split('.').pop()?.toLowerCase();
+  return {
+    png: 'image/png',
+    jpg: 'image/jpeg',
+    jpeg: 'image/jpeg',
+    gif: 'image/gif',
+    webp: 'image/webp',
+    svg: 'image/svg+xml',
+  }[extension] || 'application/octet-stream';
+}
+
+/**
+ * Reads an assigned content file and caches a data URL for the preview.
+ * @param {string} path content/ path.
+ * @returns {Promise<string>} Data URL, or empty when the file is missing.
+ */
+export async function ensureContentDataUrl(path) {
+  if (!path || contentDataUrls.has(path) || contentDataLoading.has(path)) {
+    return contentDataUrls.get(path) || '';
+  }
+  if (!host || !packageRef || typeof host.readEncoded !== 'function') {
+    return '';
+  }
+  contentDataLoading.add(path);
+  try {
+    const data = await host.readEncoded(packageRef, path);
+    const url = data.encoding === 'base64' && data.content
+      ? `data:${contentMime(path)};base64,${data.content}`
+      : '';
+    contentDataUrls.set(path, url);
+  }
+  catch {
+    contentDataUrls.set(path, '');
+  }
+  finally {
+    contentDataLoading.delete(path);
+  }
+  notifyPreview();
+  return contentDataUrls.get(path) || '';
+}
+
+/**
+ * Loads custom stylesheets and assigned images the preview has not seen yet.
+ * @returns {void}
+ */
+export function ensurePreviewSources() {
+  for (const path of ['custom/default.css', 'custom/mobile.css']) {
+    if (customValue(path) !== undefined) {
+      continue;
+    }
+    readCustom(path).then((text) => {
+      if (customValue(path) === undefined) {
+        rememberCustom(path, text);
+        notifyPreview();
+      }
+    }).catch(() => {
+      if (customValue(path) === undefined) {
+        rememberCustom(path, '');
+        notifyPreview();
+      }
+    });
+  }
+  for (const path of Object.values(themeResources)) {
+    if (path && !contentDataUrls.has(path)) {
+      void ensureContentDataUrl(path);
+    }
+  }
 }
 
 /**

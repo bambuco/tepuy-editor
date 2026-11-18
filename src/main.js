@@ -7,6 +7,7 @@
 
 import { createEdy } from '../vendor/edy/src/index.js';
 import { createHostClient } from './core/host.js';
+import { loadThemeDocuments } from './core/themes.js';
 import { tepuyShell } from './extensions/tepuy.js';
 import { setEditorLocale } from './i18n/messages.js';
 import { bindEditor, bindHost } from './ui/session.js';
@@ -28,6 +29,7 @@ export async function mountEditor() {
   }
   const locale = 'es';
   setEditorLocale(locale);
+  await loadThemeDocuments();
   editor = createEdy({
     container,
     locale,

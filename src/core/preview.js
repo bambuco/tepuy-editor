@@ -25,61 +25,8 @@ function escapeHtml(value) {
     .replaceAll('"', '&quot;');
 }
 
-/**
- * @param {string} html Full document or body fragment.
- * @returns {string} Inner body HTML.
- */
-function bodyFromDocument(html) {
-  if (!html) {
-    return '';
-  }
-  const match = html.match(/<body[^>]*>([\s\S]*)<\/body>/i);
-  return match ? match[1].trim() : html;
-}
-
-/**
- * Builds a static preview document. It does not include editor scripts.
- * @param {{html?: string, variables?: Object<string, string>, mobile?: boolean, settings?: Object<string, string>, view?: string, autoloadNote?: string, indexHtml?: string, contentHtml?: string}} options Applied content and theme.
- * @returns {string} HTML document for a sandboxed iframe.
- */
-export function buildPreviewHtml({
-  html = '',
-  variables = {},
-  mobile = false,
-  settings = {},
-  view = 'content',
-  autoloadNote = '',
-  indexHtml = '',
-  contentHtml = '',
-}) {
-  const custom = Object.entries(variables)
-    .filter(([, value]) => safeCssValue(String(value)))
-    .map(([name, value]) => `${name}: ${value};`)
-    .join('');
-  let body;
-  if (view === 'presentation') {
-    if (indexHtml) {
-      body = bodyFromDocument(indexHtml);
-      if (settings.autoload === 'true' && autoloadNote) {
-        body += `<p>${escapeHtml(autoloadNote)}</p>`;
-      }
-    }
-    else {
-      body = `<div id="content"></div><div id="play_scorm"><button type="button">Iniciar</button></div>`;
-    }
-  }
-  else if (contentHtml) {
-    body = bodyFromDocument(contentHtml);
-  }
-  else {
-    body = bodyFromDocument(html) || html;
-  }
-  return `<!DOCTYPE html>
-<html lang="${escapeHtml(settings.lang || 'es')}">
-<head>
-  <meta charset="utf-8">
-  <style>
-    :root { ${custom} }
+/** Rules that approximate control chrome before the theme stylesheet. */
+const CONTROL_CSS = `
     body { margin: 16px; background: var(--tepuy-color-bg, #f2f2f2); color: var(--tepuy-color-heading, #3f637e); font: 16px/1.5 sans-serif; }
     .box-text { padding: 8px 12px; margin: 8px 0; border-left: 4px solid var(--tepuy-color-heading, #3f637e); }
     .box-text[label]::before { content: attr(label); display: block; font-weight: 700; }
@@ -105,7 +52,126 @@ export function buildPreviewHtml({
     .horizontal-menu dt, .vertical-menu dt { font-weight: 700; }
     body[data-mobile-mode="false"] .onlymobile { display: none; }
     body[data-mobile-mode="true"] .notmobile { display: none; }
-    #play_scorm button { font: inherit; padding: 8px 16px; }
+    #play_scorm button { font: inherit; padding: 8px 16px; }`;
+
+/**
+ * @param {string} css Stylesheet text placed inside a style element.
+ * @returns {string} Text that cannot close the surrounding style element.
+ */
+function embedCss(css) {
+  return String(css || '').replace(/</g, '\\3C ');
+}
+
+/**
+ * @param {string} path CSS url path.
+ * @returns {string} Pattern that matches that path inside url().
+ */
+function urlPattern(path) {
+  const escaped = String(path).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`url\\(\\s*(['"]?)${escaped}\\1\\s*\\)`, 'g');
+}
+
+/**
+ * Rewrites theme asset urls for an inlined preview stylesheet.
+ * Assigned resources point at content data URLs. Other assets stay on the theme.
+ * @param {string} css Theme stylesheet.
+ * @param {{resources?: Array<{name?: string, default?: string}>, assignments?: Object<string, string>, assetBase?: string, contentUrls?: Object<string, string>}} [options] Replacement map.
+ * @returns {string} Stylesheet safe to embed.
+ */
+export function rewriteThemeCss(css, { resources = [], assignments = {}, assetBase = '', contentUrls = {} } = {}) {
+  let next = String(css || '');
+  for (const resource of resources) {
+    const assigned = resource?.name ? assignments[resource.name] : '';
+    const target = assigned ? contentUrls[assigned] : '';
+    if (!resource?.default || !target) {
+      continue;
+    }
+    next = next.replace(urlPattern(resource.default), `url("${target}")`);
+  }
+  if (assetBase) {
+    next = next.replace(/url\(\s*(['"]?)(assets\/[^'")\s]+)\1\s*\)/g, (_match, _quote, path) => {
+      const absolute = new URL(path, assetBase).href;
+      return `url("${absolute}")`;
+    });
+  }
+  return embedCss(next);
+}
+
+/**
+ * @param {Object<string, string>} variables Theme custom properties.
+ * @returns {string} Declarations that are safe inside :root.
+ */
+function rootDeclarations(variables) {
+  return Object.entries(variables)
+    .filter(([name, value]) => /^--[a-zA-Z0-9-]+$/.test(name) && safeCssValue(String(value)))
+    .map(([name, value]) => `${name}: ${value};`)
+    .join('');
+}
+
+/**
+ * @param {string} html Full document or body fragment.
+ * @returns {string} Inner body HTML.
+ */
+function bodyFromDocument(html) {
+  if (!html) {
+    return '';
+  }
+  const match = html.match(/<body[^>]*>([\s\S]*)<\/body>/i);
+  return match ? match[1].trim() : html;
+}
+
+/**
+ * Builds a static preview document. It does not include editor scripts.
+ * @param {{html?: string, variables?: Object<string, string>, mobile?: boolean, settings?: Object<string, string>, view?: string, autoloadNote?: string, indexHtml?: string, contentHtml?: string, themeCss?: string, resources?: Array<{name?: string, default?: string}>, assignments?: Object<string, string>, assetBase?: string, contentUrls?: Object<string, string>, desktopCss?: string, mobileCss?: string}} options Applied content and theme.
+ * @returns {string} HTML document for a sandboxed iframe.
+ */
+export function buildPreviewHtml({
+  html = '',
+  variables = {},
+  mobile = false,
+  settings = {},
+  view = 'content',
+  autoloadNote = '',
+  indexHtml = '',
+  contentHtml = '',
+  themeCss = '',
+  resources = [],
+  assignments = {},
+  assetBase = '',
+  contentUrls = {},
+  desktopCss = '',
+  mobileCss = '',
+}) {
+  const custom = rootDeclarations(variables);
+  const themeSheet = rewriteThemeCss(themeCss, { resources, assignments, assetBase, contentUrls });
+  const userSheet = embedCss((mobile ? mobileCss : desktopCss) || '').trim();
+  let body;
+  if (view === 'presentation') {
+    if (indexHtml) {
+      body = bodyFromDocument(indexHtml);
+      if (settings.autoload === 'true' && autoloadNote) {
+        body += `<p>${escapeHtml(autoloadNote)}</p>`;
+      }
+    }
+    else {
+      body = `<div id="content"></div><div id="play_scorm"><button type="button">Iniciar</button></div>`;
+    }
+  }
+  else if (contentHtml) {
+    body = bodyFromDocument(contentHtml);
+  }
+  else {
+    body = bodyFromDocument(html) || html;
+  }
+  return `<!DOCTYPE html>
+<html lang="${escapeHtml(settings.lang || 'es')}">
+<head>
+  <meta charset="utf-8">
+  <style>
+    :root { ${custom} }
+${CONTROL_CSS}
+${themeSheet}
+${userSheet}
   </style>
 </head>
 <body data-mobile-mode="${mobile ? 'true' : 'false'}">

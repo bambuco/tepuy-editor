@@ -21,21 +21,31 @@ export function findTheme(id) {
 }
 
 /**
- * Loads the layout HTML of an installed theme.
  * @param {string} id Theme identifier.
- * @returns {Promise<string>} Theme content document.
+ * @param {string} fileName index.html or content.html.
+ * @param {string} missing Error when the file cannot be fetched.
+ * @returns {Promise<string>} Theme document.
  */
-export async function readThemeLayout(id) {
+async function readThemeDocument(id, fileName, missing) {
   const theme = findTheme(id);
   if (!theme) {
     throw new Error(`Theme "${id}" is not installed.`);
   }
-  const url = new URL(`../themes/${theme.id}/content.html`, import.meta.url);
-  const response = await fetch(url);
+  const url = new URL(`../themes/${theme.id}/${fileName}`, import.meta.url);
+  const response = await fetch(url, { cache: 'no-store' });
   if (!response.ok) {
-    throw new Error(`Theme "${id}" has no content layout.`);
+    throw new Error(missing);
   }
   return response.text();
+}
+
+/**
+ * Loads the layout HTML of an installed theme.
+ * @param {string} id Theme identifier.
+ * @returns {Promise<string>} Theme content document.
+ */
+export function readThemeLayout(id) {
+  return readThemeDocument(id, 'content.html', `Theme "${id}" has no content layout.`);
 }
 
 /**
@@ -43,90 +53,112 @@ export async function readThemeLayout(id) {
  * @param {string} id Theme identifier.
  * @returns {Promise<string>} Theme index document.
  */
-export async function readThemeIndex(id) {
-  const theme = findTheme(id);
-  if (!theme) {
-    throw new Error(`Theme "${id}" is not installed.`);
-  }
-  const url = new URL(`../themes/${theme.id}/index.html`, import.meta.url);
-  const response = await fetch(url);
-  if (!response.ok) {
-    throw new Error(`Theme "${id}" has no index layout.`);
-  }
-  return response.text();
+export function readThemeIndex(id) {
+  return readThemeDocument(id, 'index.html', `Theme "${id}" has no index layout.`);
 }
 
 /**
- * Synchronous theme index for Node tests and seeding without fetch.
+ * Loads the theme.css of an installed theme.
  * @param {string} id Theme identifier.
- * @returns {string} Minimal index HTML with metadata markers.
+ * @returns {Promise<string>} Theme stylesheet.
  */
-export function themeIndexTemplate(id) {
+export function readThemeStyle(id) {
+  return readThemeDocument(id, 'theme.css', `Theme "${id}" has no stylesheet.`);
+}
+
+/** @type {Map<string, string>} Index HTML loaded from each theme folder. */
+const indexSources = new Map();
+
+/** @type {Map<string, string>} Content HTML loaded from each theme folder. */
+const contentSources = new Map();
+
+/** @type {Map<string, string>} Theme stylesheets loaded from each theme folder. */
+const styleSources = new Map();
+
+/**
+ * Loads every installed theme index.html, content.html, and theme.css into memory.
+ * @returns {Promise<void>}
+ */
+export async function loadThemeDocuments() {
+  await Promise.all(THEMES.map(async (theme) => {
+    indexSources.set(theme.id, await readThemeIndex(theme.id));
+    contentSources.set(theme.id, await readThemeLayout(theme.id));
+    styleSources.set(theme.id, await readThemeStyle(theme.id));
+  }));
+}
+
+/**
+ * Reads a theme file from disk when the editor is running under Node.
+ * @param {string} themeId Installed theme id.
+ * @param {string} fileName index.html or content.html.
+ * @returns {string} File contents.
+ */
+function readThemeFile(themeId, fileName) {
+  const builtin = globalThis.process?.getBuiltinModule;
+  if (typeof builtin !== 'function') {
+    throw new Error(`Theme "${themeId}" ${fileName} is not loaded.`);
+  }
+  const fs = builtin.call(globalThis.process, 'node:fs');
+  const { fileURLToPath } = builtin.call(globalThis.process, 'node:url');
+  return fs.readFileSync(
+    fileURLToPath(new URL(`../themes/${themeId}/${fileName}`, import.meta.url)),
+    'utf8',
+  );
+}
+
+/**
+ * @param {Map<string, string>} sources Loaded documents.
+ * @param {string} id Theme identifier.
+ * @param {string} fileName index.html or content.html.
+ * @returns {string} Theme document.
+ */
+function themeDocument(sources, id, fileName) {
   const theme = findTheme(id) || findTheme('base');
   const themeId = theme?.id || 'base';
-  const version = theme?.version || '1.0.0';
-  return `<!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="utf-8">
-  <meta name="tepuy-theme" content="${themeId}@${version}">
-  <title></title>
-</head>
-<body data-autoload="false" data-display-window="top">
-  <div id="body">
-    <h1 class="metadata" data-key="title"></h1>
-    <div id="content">
-      <p class="metadata" data-key="topic"></p>
-      <section class="metadata" data-key="description"></section>
-      <section class="metadata" data-key="objective"></section>
-      <p class="metadata" data-key="duration" data-unit="hours"></p>
-      <span class="metadata" data-key="participation"></span>
-      <span class="metadata" data-key="modality"></span>
-      <span class="metadata" data-key="synchronicity"></span>
-      <div id="play_scorm"></div>
-    </div>
-  </div>
-</body>
-</html>
-`;
+  if (!sources.has(themeId)) {
+    sources.set(themeId, readThemeFile(themeId, fileName));
+  }
+  return sources.get(themeId);
 }
 
 /**
- * Synchronous theme content.html shell (matches each theme content.html).
+ * Returns the installed theme index.html. The browser loads it through
+ * loadThemeDocuments(); Node reads the file directly.
+ * @param {string} id Theme identifier.
+ * @returns {string} Theme index document.
+ */
+export function themeIndexTemplate(id) {
+  return themeDocument(indexSources, id, 'index.html');
+}
+
+/**
+ * Returns the installed theme content.html. The browser loads it through
+ * loadThemeDocuments(); Node reads the file directly.
  * @param {string} id Theme identifier.
  * @returns {string} Theme content document used as serialize/preview shell.
  */
 export function themeContentTemplate(id) {
+  return themeDocument(contentSources, id, 'content.html');
+}
+
+/**
+ * Returns the installed theme.css. The browser loads it through
+ * loadThemeDocuments(); Node reads the file directly.
+ * @param {string} id Theme identifier.
+ * @returns {string} Theme stylesheet.
+ */
+export function themeStylesheet(id) {
+  return themeDocument(styleSources, id, 'theme.css');
+}
+
+/**
+ * @param {string} id Theme identifier.
+ * @returns {string} Absolute URL of the theme folder, with a trailing slash.
+ */
+export function themeAssetBase(id) {
   const theme = findTheme(id) || findTheme('base');
   const themeId = theme?.id || 'base';
-  const version = theme?.version || '1.0.0';
-  return `<!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="utf-8">
-  <meta name="tepuy-theme" content="${themeId}@${version}">
-  <meta name="tepuy-version" content="2.0">
-  <title>Tepuy</title>
-  <link rel="stylesheet" href="theme.css">
-</head>
-<body>
-  <nav class="main"></nav>
-  <nav class="globals"></nav>
-  <div id="tpy-measuring_progress"></div>
-  <nav class="secondary globals2"></nav>
-  <div id="tpy-subpages_menu"></div>
-  <div id="tpy-page_number"></div>
-  <div id="tpy-results_page"></div>
-  <div id="tpy-pg_credits" data-global="credits"></div>
-  <div id="tpy-pg_bibliography" data-global="library"></div>
-  <div id="tpy-auto_citation"></div>
-  <div id="global-pages"></div>
-  <main>
-    <h1 class="tpy-page-title"></h1>
-  </main>
-</body>
-</html>
-`;
+  return new URL(`../themes/${themeId}/`, import.meta.url).href;
 }
 
 /**

@@ -748,8 +748,8 @@ export function renderCanvas(mode, context, options = {}) {
       const control = form.elements?.namedItem?.(key) || form.querySelector(`[name="${CSS.escape(key)}"]`);
       const value = control && 'value' in control ? String(control.value ?? '') : '';
       if (kind === 'number') {
-        const unitControl = form.elements?.namedItem?.(`${key}__unit`)
-          || form.querySelector(`[name="${CSS.escape(`${key}__unit`)}"]`);
+        const unitControl = form.elements?.namedItem?.(`${key}-selected`)
+          || form.querySelector(`[name="${CSS.escape(`${key}-selected`)}"]`);
         const unit = unitControl && 'value' in unitControl
           ? String(unitControl.value || field?.defaultUnit || 'hours')
           : (field?.defaultUnit || 'hours');
@@ -792,18 +792,18 @@ export function renderCanvas(mode, context, options = {}) {
         continue;
       }
       if (kind === 'number') {
+        const units = field?.units || ['hours'];
+        const selected = units.includes(current.unit) ? current.unit : (field?.defaultUnit || units[0]);
         fields.push({
           name: key,
           label,
-          type: 'text',
-          value: current.value || '',
-        });
-        fields.push({
-          name: `${key}__unit`,
-          label: '\u00a0',
-          type: 'select',
-          value: current.unit || field?.defaultUnit || 'hours',
-          options: (field?.units || ['hours']).map((item) => ({
+          type: 'input-select',
+          inputType: 'number',
+          min: 0,
+          step: 1,
+          selectLabel: t('metadata.unit'),
+          value: { input: current.value || '', selected },
+          options: units.map((item) => ({
             value: item,
             label: t(`metadata.unit.${item}`),
           })),
@@ -862,23 +862,6 @@ export function renderCanvas(mode, context, options = {}) {
     for (const button of indexActions.querySelectorAll('button')) {
       button.disabled = !dirty;
     }
-  }
-
-  /**
-   * @returns {HTMLElement} Start button that cannot be moved or deleted.
-   */
-  function lockedPlay() {
-    const locked = document.createElement('div');
-    locked.className = 'tepuy-locked';
-    locked.id = 'play_scorm';
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.disabled = true;
-    button.textContent = t('canvas.start');
-    const note = document.createElement('p');
-    note.textContent = t('canvas.locked');
-    locked.append(button, note);
-    return locked;
   }
 
   /**
@@ -1037,7 +1020,7 @@ export function renderCanvas(mode, context, options = {}) {
       indexForm = null;
       scroller.replaceChildren();
       indexForm = renderIndexForm();
-      scroller.append(indexForm, lockedPlay());
+      scroller.append(indexForm);
       paintIndexActions();
     }
     else {

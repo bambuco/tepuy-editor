@@ -1,24 +1,27 @@
 {
-  "id": "rutatic",
-  "name": "Rutatic",
-  "version": "1.0.0",
-  "positions": [
-    "nav.main",
-    "nav.globals",
-    "#tpy-measuring_progress",
-    "nav.secondary",
-    "#tpy-subpages_menu",
-    "#tpy-page_number",
-    "#tpy-results_page",
-    "#tpy-pg_credits",
-    "#tpy-pg_bibliography",
-    "#tpy-auto_citation",
-    ".tpy-page-title",
-    "main > section"
-  ],
-  "variables": {
-    "--tepuy-color-bg": "#f4f7f2",
-    "--tepuy-color-heading": "#1b5e20",
-    "--tepuy-color-important": "#2e7d32"
-  }
+    "id": "rutatic",
+    "name": "Rutatic",
+    "version": "1.0.0",
+    "variables": {
+        "--tepuy-color-bg": "#f4f7f2",
+        "--tepuy-color-primary": "#163d4e",
+        "--tepuy-color-heading": "#1b5e20",
+        "--tepuy-color-important": "#2e7d32",
+        "--tepuy-color-border": "#c9c9c9",
+        "--tepuy-color-shadow": "#c9c9c9",
+        "--tepuy-color-text": "#333333",
+        "--tepuy-color-text-important": "#2e7d32",
+        "--tepuy-color-text-heading": "#1b5e20",
+        "--tepuy-color-text-border": "#c9c9c9",
+        "--tepuy-color-text-shadow": "#c9c9c9",
+        "--tepuy-color-text-bg": "#f4f7f2"
+    },
+    "resources": [
+        {
+            "type": "image",
+            "name": "logo",
+            "description": "Image to the top left of the page. Recommended size: 212x70px.",
+            "default": "assets/logo.png"
+        }
+    ]
 }

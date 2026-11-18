@@ -7,6 +7,7 @@
 
 import { htmlFragment, sanitizeHtml, serializeFragment } from '../core/html.js';
 import { serializeContent } from '../core/serializer.js';
+import { t } from '../i18n/messages.js';
 import {
   BASE_METADATA,
   LEGACY_METADATA_MAP,
@@ -153,6 +154,10 @@ export function readMetadataNode(node) {
     || (node.children || []).map((child) => (
       child.type === 'text' ? child.text : serializeFragment(child.children || [])
     )).join('').replace(/\s+/g, ' ').trim();
+  if (kind === 'number') {
+    const match = text.match(/^(\d+(?:[.,]\d+)?)/);
+    return { value: match ? match[1] : '', ...(unit ? { unit } : {}) };
+  }
   return { value: text, ...(unit ? { unit } : {}) };
 }
 
@@ -232,7 +237,11 @@ export function writeMetadataNode(node, value, unit, Parser = globalThis.DOMPars
     const nextUnit = unit || node.attrs?.['data-unit'] || field?.defaultUnit || 'hours';
     attrs['data-unit'] = nextUnit;
     node.attrs = attrs;
-    node.children = value ? [{ type: 'text', text: String(value) }] : [];
+    const number = String(value ?? '').trim();
+    const labelKey = `metadata.unit.${nextUnit}`;
+    const label = t(labelKey);
+    const text = number && label !== labelKey ? `${number} ${label}` : number;
+    node.children = text ? [{ type: 'text', text }] : [];
     return;
   }
   delete attrs['data-unit'];

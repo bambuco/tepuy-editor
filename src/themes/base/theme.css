@@ -1,5 +1,41 @@
-:root {
-  --tepuy-color-bg: #f2f2f2;
-  --tepuy-color-heading: #3f637e;
-  --tepuy-color-important: #e2793d;
+button.general {
+  background-color: var(--tepuy-color-heading);
+  color: var(--tepuy-color-bg);
+  font-weight:bold;
+  border: none;
+  padding: 5px 10px;
+  box-shadow: 3px 4px 4px var(--tepuy-color-shadow);
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+button.general.active, button.general:hover {
+  background-color: var(--tepuy-color-important);
+  color: var(--tepuy-color-bg);
+}
+
+#content {
+  padding: 15px;
+  border: 1px solid var(--tepuy-color-border);
+  border-radius: 15px;
+  box-shadow: 8px 8px 8px var(--tepuy-color-shadow);
+  background-color: var(--tepuy-color-bg);
+}
+
+#play_scorm {
+  text-align: center;
+}
+
+.ui-state-error, .ui-state-highlight {
+  padding: 10px;
+}
+
+@media (max-width:750px) {
+  #body {
+      width: 95%;
+  }
+
+  #play_scorm {
+      max-width: 100%;
+  }
 }

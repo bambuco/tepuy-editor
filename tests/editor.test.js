@@ -12,6 +12,7 @@ import { DOMParser } from 'linkedom';
 import { editableValue, nodeAt, withEditableValue } from '../src/core/edit.js';
 import { parseContentHtml } from '../src/core/parser.js';
 import { buildPreviewHtml } from '../src/core/preview.js';
+import { themeStylesheet } from '../src/core/themes.js';
 import { serializeContent } from '../src/core/serializer.js';
 import { SAMPLE_CONTENT } from '../src/sample-content.js';
 
@@ -57,4 +58,38 @@ test('the preview document is static and marks the mobile frame', () => {
   assert.match(html, /--tepuy-color-bg: #abc;/);
   assert.doesNotMatch(html, /--bad/);
   assert.doesNotMatch(html, /<script/i);
+});
+
+test('the preview stacks variables, controls, theme assets, and one custom sheet', () => {
+  const shared = {
+    html: '<main></main>',
+    variables: { '--tepuy-color-bg': '#abc', '--bad': 'red; } body { background: url(http://x)' },
+    themeCss: 'body { background: url(assets/bg.png); } h1 { background: url("assets/logo.png"); }',
+    resources: [{ name: 'logo', default: 'assets/logo.png' }],
+    assignments: { logo: 'content/logo.png' },
+    assetBase: 'https://editor.test/themes/rutatic/',
+    contentUrls: { 'content/logo.png': 'data:image/png;base64,QQ' },
+    desktopCss: '.desktop { color: red; }',
+    mobileCss: '.mobile { color: blue; } </style><script>alert(1)</script>',
+  };
+  assert.match(themeStylesheet('base'), /#content/);
+  const desktop = buildPreviewHtml({ ...shared, mobile: false });
+  const style = desktop.slice(desktop.indexOf('<style>'), desktop.indexOf('</style>'));
+  const rootAt = style.indexOf(':root');
+  const controlsAt = style.indexOf('.box-text');
+  const assetAt = style.indexOf('https://editor.test/themes/rutatic/assets/bg.png');
+  const logoAt = style.indexOf('data:image/png;base64,QQ');
+  const customAt = style.indexOf('.desktop');
+  assert.ok(rootAt >= 0 && rootAt < controlsAt);
+  assert.ok(controlsAt < assetAt);
+  assert.ok(assetAt < logoAt);
+  assert.ok(logoAt < customAt);
+  assert.match(desktop, /--tepuy-color-bg: #abc;/);
+  assert.doesNotMatch(desktop, /--bad/);
+  assert.doesNotMatch(desktop, /\.mobile/);
+  assert.doesNotMatch(desktop, /<script/i);
+  const mobile = buildPreviewHtml({ ...shared, mobile: true });
+  assert.match(mobile, /\.mobile/);
+  assert.doesNotMatch(mobile, /\.desktop/);
+  assert.doesNotMatch(mobile, /<script/i);
 });

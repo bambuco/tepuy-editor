@@ -44,6 +44,7 @@ test('metadata round-trips through write and parse', () => {
   assert.match(html, /class="metadata"/);
   assert.match(html, /data-key="title"/);
   assert.match(html, /data-unit="hours"/);
+  assert.match(html, /12 Horas/);
 });
 
 test('legacy presentation migrates into metadata markers', () => {
