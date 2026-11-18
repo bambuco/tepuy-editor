@@ -20,7 +20,7 @@ import { nodeAt } from '../core/edit.js';
 import { serializePackage, settingsFields } from '../core/package.js';
 import { buildPreviewHtml } from '../core/preview.js';
 import { findTheme, themeAssetBase, themeStylesheet } from '../core/themes.js';
-import { serializeIndexDocument } from '../metadata/index-document.js';
+import { serializePresentation } from '../metadata/index-document.js';
 import { filterLog } from '../core/host.js';
 import { t } from '../i18n/messages.js';
 import { renderCanvas } from './canvas.js';
@@ -867,7 +867,7 @@ export function registerActivity(context) {
         },
         view: currentPackageView(),
         autoloadNote: t('panel.autoload'),
-        indexHtml: serializeIndexDocument(index),
+        indexHtml: serializePresentation(index),
         contentHtml: serializePackage(documentNode, settings, {
           themeId,
           themeVersion: theme?.version || '1.0.0',

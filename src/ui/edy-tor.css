@@ -133,6 +133,9 @@
 }
 
 .tepuy-canvas {
+  --tepuy-color-bg: #f2f2f2;
+  --tepuy-color-heading: #24323a;
+  --tepuy-color-important: #e2793d;
   display: flex;
   flex-direction: column;
   height: 100%;

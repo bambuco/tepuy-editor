@@ -3,10 +3,12 @@
   "name": "Base",
   "version": "1.0.0",
   "variables": {
-    "--tepuy-color-bg": "#f2f2f2",
+    "--tepuy-color-bg": "rgba(242, 242, 242, 0.7)",
     "--tepuy-color-heading": "#3f637e",
     "--tepuy-color-important": "#e2793d",
     "--tepuy-color-border": "#c9c9c9",
-    "--tepuy-color-shadow": "#c9c9c9"
+    "--tepuy-color-shadow": "#c9c9c9",
+    "--tepuy-color-text": "#333333",
+    "--tepuy-color-card-bg": "#ffffff"
   }
 }

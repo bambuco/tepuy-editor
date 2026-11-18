@@ -17,6 +17,7 @@ import {
   parseIndexHtml,
   readMetadata,
   serializeIndexDocument,
+  serializePresentation,
   writeMetadataValue,
 } from '../src/metadata/index-document.js';
 import { BASE_METADATA, resolveMetadataKind } from '../src/metadata/schema.js';
@@ -44,7 +45,36 @@ test('metadata round-trips through write and parse', () => {
   assert.match(html, /class="metadata"/);
   assert.match(html, /data-key="title"/);
   assert.match(html, /data-unit="hours"/);
+  assert.match(html, /data-value="group"/);
   assert.match(html, /12 Horas/);
+  assert.match(html, /Grupal/);
+  const marker = listMetadataNodes(again.body).find((item) => item.key === 'participation');
+  delete marker.node.attrs['data-value'];
+  marker.node.children = [{ type: 'text', text: 'group' }];
+  assert.equal(readMetadata(again.body).participation.value, 'group');
+});
+
+test('empty related labels are omitted from the presentation', () => {
+  const index = parseIndexHtml(themeIndexTemplate('base'));
+  const empty = serializePresentation(index);
+  assert.doesNotMatch(empty, /data-relatedto="objective"/);
+  assert.doesNotMatch(empty, /data-relatedto="duration"/);
+  assert.match(empty, /Detalles/);
+  assert.match(serializeIndexDocument(index), /data-relatedto="objective"/);
+  assert.match(serializeIndexDocument(index), /data-relatedto="duration"/);
+
+  writeMetadataValue(index.body, 'objective', '<p></p>', undefined, DOMParser);
+  assert.doesNotMatch(serializePresentation(index), /data-relatedto="objective"/);
+
+  writeMetadataValue(index.body, 'objective', '<p>Meta</p>', undefined, DOMParser);
+  writeMetadataValue(index.body, 'duration', '12', 'hours', DOMParser);
+  const filled = serializePresentation(index);
+  assert.match(filled, /data-relatedto="objective"/);
+  assert.match(filled, /data-relatedto="duration"/);
+  assert.match(filled, /12 Horas/);
+  assert.match(filled, /Meta/);
+  assert.match(serializeIndexDocument(index), /data-relatedto="participation"/);
+  assert.doesNotMatch(filled, /data-relatedto="participation"/);
 });
 
 test('legacy presentation migrates into metadata markers', () => {

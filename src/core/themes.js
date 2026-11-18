@@ -13,6 +13,25 @@ import rutatic from '../themes/rutatic/theme.json' with { type: 'json' };
 export const THEMES = [base, rutatic, perception];
 
 /**
+ * Selectors a theme layout may implement. A theme uses one by placing it in content.html.
+ * @type {string[]}
+ */
+export const THEME_POSITIONS = [
+  'nav.main',
+  'nav.globals',
+  '#tpy-measuring_progress',
+  'nav.secondary',
+  '#tpy-subpages_menu',
+  '#tpy-page_number',
+  '#tpy-results_page',
+  '#tpy-pg_credits',
+  '#tpy-pg_bibliography',
+  '#tpy-auto_citation',
+  '.tpy-page-title',
+  'main > section',
+];
+
+/**
  * @param {string} id Theme identifier.
  * @returns {Object|null} Installed theme, or null when the package names an unknown one.
  */
@@ -163,13 +182,12 @@ export function themeAssetBase(id) {
 
 /**
  * @param {string} html Theme content.html.
- * @param {string[]} positions Declared positions.
  * @param {typeof DOMParser} [Parser] DOM parser constructor.
- * @returns {string[]} Positions the layout actually contains.
+ * @returns {string[]} Contract positions the layout actually contains.
  */
-export function presentPositions(html, positions, Parser = globalThis.DOMParser) {
-  const document = new Parser().parseFromString(html, 'text/html');
-  return positions.filter((position) => {
+export function presentPositions(html, Parser = globalThis.DOMParser) {
+  const document = new Parser().parseFromString(html || '', 'text/html');
+  return THEME_POSITIONS.filter((position) => {
     if (position === 'main > section') {
       return Boolean(document.querySelector('main'));
     }
@@ -190,11 +208,13 @@ export function applyTheme(userMain) {
 /**
  * @param {Object} fromTheme Theme that is currently open.
  * @param {Object} toTheme Theme that will be applied.
+ * @param {string} [fromHtml] Current theme content.html.
+ * @param {string} [toHtml] Next theme content.html.
  * @returns {{missingPositions: string[], changedVariables: string[]}} Differences to show the user.
  */
-export function themeChangeReport(fromTheme, toTheme) {
-  const nextPositions = new Set(toTheme.positions || []);
-  const missingPositions = (fromTheme.positions || []).filter((position) => !nextPositions.has(position));
+export function themeChangeReport(fromTheme, toTheme, fromHtml = '', toHtml = '') {
+  const nextPositions = new Set(presentPositions(toHtml));
+  const missingPositions = presentPositions(fromHtml).filter((position) => !nextPositions.has(position));
   const keys = new Set([
     ...Object.keys(fromTheme.variables || {}),
     ...Object.keys(toTheme.variables || {}),

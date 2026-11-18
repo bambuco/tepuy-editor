@@ -1,41 +1,140 @@
-button.general {
-  background-color: var(--tepuy-color-heading);
-  color: var(--tepuy-color-bg);
-  font-weight:bold;
-  border: none;
-  padding: 5px 10px;
-  box-shadow: 3px 4px 4px var(--tepuy-color-shadow);
-  cursor: pointer;
-  border-radius: 4px;
+/*----------------------------
+    General
+-----------------------------*/
+html {
+    width: 100%;
+    height: 100%;
 }
 
-button.general.active, button.general:hover {
-  background-color: var(--tepuy-color-important);
-  color: var(--tepuy-color-bg);
+body {
+    font-family: sans-serif;
+    font-size: 14px;
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    background-color: var(--tepuy-color-bg);
+}
+
+#body {
+    clear: both;
+    margin: auto;
+    padding: 20px 10px 70px;
+    position: relative;
+    max-width: 1200px;
+}
+
+h1 {
+    font-size: 25px;
+    color: var(--tepuy-color-heading);
+    font-weight: normal;
+}
+
+h2 {
+    font-size: 19px;
+    color: var(--tepuy-color-heading);
+    border-bottom: dotted 2px var(--tepuy-color-heading);
+}
+
+h3 {
+    font-size: 18px;
+    color: var(--tepuy-color-text);
+    border-bottom: dotted 2px var(--tepuy-color-heading);
+    margin-top: 15px;
+}
+
+h4 {
+    font-size: 15px;
+}
+
+h5 {
+    font-size: 14px;
+}
+
+h6 {
+    font-size: 14px;
+    font-weight: normal;
+}
+
+pre {
+    background: var(--tepuy-color-card-bg);
+    border: #000 dashed 1px;
+    padding: 6px;
+    overflow: auto;
+    color: var(--tepuy-color-text);
+}
+
+cite {
+    font-weight: normal;
+    font-style: italic;
+    color: var(--tepuy-color-text);
+}
+
+em {
+    color: var(--tepuy-color-important);
+}
+
+p {
+    line-height: 20px;
+}
+
+img {
+    border: 0;
+}
+
+br.clear,
+div.clear {
+    clear: both;
+    width: 0;
+    height: 0;
+    font-size: 0;
+    line-height: 0;
+}
+
+.hidden {
+    display: none;
+}
+
+button.general {
+    background-color: var(--tepuy-color-heading);
+    color: var(--tepuy-color-bg);
+    font-weight: bold;
+    border: none;
+    padding: 5px 10px;
+    box-shadow: 3px 4px 4px var(--tepuy-color-shadow);
+    cursor: pointer;
+    border-radius: 4px;
+
+    &.active,
+    &:hover {
+        background-color: var(--tepuy-color-important);
+        color: var(--tepuy-color-bg);
+    }
 }
 
 #content {
-  padding: 15px;
-  border: 1px solid var(--tepuy-color-border);
-  border-radius: 15px;
-  box-shadow: 8px 8px 8px var(--tepuy-color-shadow);
-  background-color: var(--tepuy-color-bg);
+    padding: 15px;
+    border: 1px solid var(--tepuy-color-border);
+    border-radius: 15px;
+    box-shadow: 8px 8px 8px var(--tepuy-color-shadow);
+    background-color: var(--tepuy-color-card-bg);
 }
 
 #play_scorm {
-  text-align: center;
+    text-align: center;
 }
 
-.ui-state-error, .ui-state-highlight {
-  padding: 10px;
+.ui-state-error,
+.ui-state-highlight {
+    padding: 10px;
 }
 
 @media (max-width:750px) {
-  #body {
-      width: 95%;
-  }
+    #body {
+        width: 95%;
+    }
 
-  #play_scorm {
-      max-width: 100%;
-  }
+    #play_scorm {
+        max-width: 100%;
+    }
 }

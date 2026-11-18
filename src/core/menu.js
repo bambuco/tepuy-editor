@@ -5,7 +5,7 @@
  * @license http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-import { findTheme } from './themes.js';
+import { findTheme, presentPositions, themeContentTemplate } from './themes.js';
 import * as baseMenu from '../themes/base/menu.js';
 import * as perceptionMenu from '../themes/perception/menu.js';
 import * as rutaticMenu from '../themes/rutatic/menu.js';
@@ -225,9 +225,11 @@ export function ensureMainMenuFromPages(nav, themeId, pages) {
 
 /**
  * @param {string} themeId Theme identifier.
- * @returns {boolean} Whether the theme declares nav.main.
+ * @returns {boolean} Whether the theme content.html includes nav.main.
  */
 export function themeHasMainMenu(themeId) {
-  const theme = findTheme(themeId);
-  return Boolean(theme?.positions?.includes('nav.main'));
+  if (!findTheme(themeId)) {
+    return false;
+  }
+  return presentPositions(themeContentTemplate(themeId)).includes('nav.main');
 }

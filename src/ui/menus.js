@@ -9,7 +9,7 @@ import { confirmDialog, openDialog } from '../../vendor/edy/src/ui/controls.js';
 import { t } from '../i18n/messages.js';
 import { nodeAt } from '../core/edit.js';
 import { readPackageSettings } from '../core/package.js';
-import { applyTheme, findTheme, presentPositions, readThemeLayout, THEMES, themeChangeReport } from '../core/themes.js';
+import { applyTheme, findTheme, readThemeLayout, THEMES, themeChangeReport } from '../core/themes.js';
 import { hasNestedControls } from '../controls/library.js';
 import { SAMPLE_CONTENT } from '../sample-content.js';
 import { allControls, editCategoryMenus, insertionNotice } from './catalog.js';
@@ -434,15 +434,18 @@ export function registerMenus(context) {
       }
       const from = findTheme(currentThemeId());
       const layout = await readThemeLayout(theme.id);
-      const absent = theme.positions.filter((position) => !presentPositions(layout, theme.positions).includes(position));
-      const report = from ? themeChangeReport(from, theme) : { missingPositions: [], changedVariables: [] };
-      const missing = [...new Set([...report.missingPositions, ...absent])];
+      const fromLayout = from ? await readThemeLayout(from.id) : '';
+      const report = from
+        ? themeChangeReport(from, theme, fromLayout, layout)
+        : { missingPositions: [], changedVariables: [] };
       replaceDocument(applyTheme(currentDocument()), theme.id, {
         index: buildIndexForTheme(theme.id),
       });
       void recordOperation('theme', theme.id, theme.name);
       syncThemeMenu(context);
-      const gaps = missing.length ? t('menu.notice.theme-missing', { positions: missing.join(', ') }) : '';
+      const gaps = report.missingPositions.length
+        ? t('menu.notice.theme-missing', { positions: report.missingPositions.join(', ') })
+        : '';
       const variables = report.changedVariables.length
         ? t('menu.notice.theme-variables', { count: report.changedVariables.length })
         : '';

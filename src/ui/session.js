@@ -44,6 +44,7 @@ import {
   readMetadata,
   readMetadataNode,
   serializeIndexDocument,
+  serializePresentation,
   writeMetadataValue,
 } from '../metadata/index-document.js';
 import { SAMPLE_CONTENT } from '../sample-content.js';
@@ -267,11 +268,48 @@ export function buildIndexForTheme(themeId) {
   next.title = current.title;
   next.bodyAttrs = {
     ...next.bodyAttrs,
-    ...Object.fromEntries(
-      ['data-autoload', 'data-display-window', 'data-window-width', 'data-window-height']
-        .filter((name) => current.bodyAttrs?.[name])
-        .map((name) => [name, current.bodyAttrs[name]]),
-    ),
+    ...presentationBodyAttrs(current.bodyAttrs),
+  };
+  return next;
+}
+
+/**
+ * @param {Object<string, string>} [attrs] Body attributes from a saved index.
+ * @returns {Object<string, string>} Window attributes worth keeping.
+ */
+function presentationBodyAttrs(attrs = {}) {
+  return Object.fromEntries(
+    ['data-autoload', 'data-display-window', 'data-window-width', 'data-window-height']
+      .filter((name) => attrs[name])
+      .map((name) => [name, attrs[name]]),
+  );
+}
+
+/**
+ * Rebuilds the theme presentation and writes the values stored in a saved index.
+ * @param {string} themeId Active theme.
+ * @param {import('../metadata/index-document.js').IndexDocument} saved Index read from the package.
+ * @returns {import('../metadata/index-document.js').IndexDocument} Editable index with its labels restored.
+ */
+function restoreIndex(themeId, saved) {
+  /** @type {Object<string, {value: string, unit?: string}>} */
+  const values = {};
+  for (const item of listMetadataNodes(saved.body)) {
+    values[item.key] = readMetadataNode(item.node);
+  }
+  const next = seedIndex(themeId, {});
+  for (const [key, payload] of Object.entries(values)) {
+    writeMetadataValue(next.body, key, payload.value, payload.unit);
+  }
+  if (saved.title) {
+    next.title = saved.title;
+  }
+  if (saved.lang) {
+    next.lang = saved.lang;
+  }
+  next.bodyAttrs = {
+    ...next.bodyAttrs,
+    ...presentationBodyAttrs(saved.bodyAttrs),
   };
   return next;
 }
@@ -1539,7 +1577,7 @@ export async function openHostPackage(ref) {
     const settings = readPackageSettings(html);
     const { main, mainMenu, globalPages } = readPackageContent(html, themeId);
     const index = indexSource
-      ? parseIndexHtml(indexSource)
+      ? restoreIndex(themeId, parseIndexHtml(indexSource))
       : migrateToMetadataIndex(themeIndexTemplate(themeId), { themeId, themeVersion: '1.0.0' }, html, settings);
     installDocument(main, themeId, settings, true, mainMenu, globalPages, index);
   }
@@ -1559,6 +1597,7 @@ export async function saveToHost() {
   }
   const html = packageHtml(currentDocument(), currentSettings(), currentThemeId(), currentMainMenu(), currentGlobalPages());
   const index = indexHtml(currentIndexDocument());
+  const presentation = serializePresentation(currentIndexDocument());
   const extra = customChanges();
   if (!host) {
     if (html === savedHtml && index === savedIndexHtml && extra.length === 0) {
@@ -1587,7 +1626,7 @@ export async function saveToHost() {
   try {
     const result = await host.commit(packageRef, [
       { op: 'write', path: 'content.html', content: html },
-      { op: 'write', path: 'index.html', content: index },
+      { op: 'write', path: 'index.html', content: presentation },
       ...extra,
     ], revision);
     revision = result.revision;

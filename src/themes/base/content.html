@@ -1,26 +1,70 @@
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
-  <meta charset="utf-8">
-  <meta name="tepuy-theme" content="base@1.0.0">
-  <meta name="tepuy-version" content="2.0">
-  <title>Tepuy</title>
-  <link rel="stylesheet" href="theme.css">
+    <meta charset="utf-8">
+    <meta name="tepuy-theme" content="base@1.0.0">
+    <meta name="tepuy-version" content="2.0">
+    <title>Tepuy</title>
+    <link rel="stylesheet" href="theme.css">
 </head>
-<body>
-  <nav class="main"></nav>
-  <nav class="globals"></nav>
-  <div id="tpy-measuring_progress"></div>
-  <nav class="secondary globals2"></nav>
-  <div id="tpy-subpages_menu"></div>
-  <div id="tpy-page_number"></div>
-  <div id="tpy-results_page"></div>
-  <div id="tpy-pg_credits" data-global="credits"></div>
-  <div id="tpy-pg_bibliography" data-global="library"></div>
-  <div id="tpy-auto_citation"></div>
-  <div id="global-pages"></div>
-  <main>
-    <h1 class="tpy-page-title"></h1>
-  </main>
+
+<body class="loading" data-debug="true" data-model="scorm" data-display-mode="onlypages" data-approve-limit="70"
+    data-activities-percentaje="60" data-mobile-mode="512">
+    <div id="body" class="not_print">
+        <div id="not_scorm_msg" style="display: none;"></div>
+
+        <header>
+            <h1 class="metadata" data-key="title">Título del recurso</h1>
+            <h2 class="metadata" data-key="topic">Paquete de contenidos</h2>
+            <nav label="Principal" class="horizontal main" data-offset="true">
+                <menu></menu>
+            </nav>
+            <h2 class="page-title"></h2>
+        </header>
+
+        <main></main>
+
+        <footer class="not_print">
+            <div id="tpy-measuring_progress"></div>
+
+            <nav label="Características globales" class="globals">
+                <menu>
+                    <menuitem data-global-id="results"><i title="Progreso" class="ion-clipboard tooltip"
+                        data-position-at="top"></i></menuitem>
+                    <menuitem data-global-id="return">
+                    <i title="Maximizar" class="ion-arrow-expand tooltip maximize" data-position-at="top"></i>
+                    <i title="Minimizar" class="ion-arrow-shrink tooltip minimize" data-position-at="top"></i>
+                    </menuitem>
+                    <menuitem data-global-id="close_all"><i title="Regresar" class="ion-reply tooltip"
+                        data-position-at="top"></i></menuitem>
+                </menu>
+            </nav>
+
+            <div id="tpy-subpages_menu">
+                <div class="button" previous-page></div>
+                <ul class="button" subpages-menu></ul>
+                <div class="button" next-page></div>
+            </div>
+
+            <div id="tpy-page_number"></div>
+        </footer>
+
+        <div id="global-pages">
+            <div id="tpy-pg_credits" data-global="credits"></div>
+            <div id="tpy-pg_bibliography" data-global="library"></div>
+        </div>
+    </div>
+
+    <div id="tpy-results_page"></div>
+    <div id="tpy-auto_citation"></div>
+
+    <div id="tpy-printent_content" style="display:none;">
+        <div class="content"></div>
+        <div class="button_container">
+            <button class="general button" onclick="window.print();">Imprimir</button>
+            <button id="printent_back" class="general button" >Volver</button>
+        </div>
+    </div>
 </body>
 </html>

@@ -17,7 +17,6 @@ import { getControl, matchableControls } from '../controls/registry.js';
 import { nodeAt } from '../core/edit.js';
 import { sanitizeHtml } from '../core/html.js';
 import { extractMainMenuItems } from '../core/menu.js';
-import { findTheme } from '../core/themes.js';
 import { t } from '../i18n/messages.js';
 import {
   listMetadataNodes,
@@ -37,7 +36,6 @@ import {
   currentPageId,
   currentSelectionPath,
   currentSelectionScope,
-  currentThemeId,
   deleteSelection,
   draftKind,
   focusHtml,
@@ -277,12 +275,6 @@ export function renderCanvas(mode, context, options = {}) {
   const section = document.createElement('section');
   section.className = 'tepuy-canvas';
   section.tabIndex = 0;
-  const theme = findTheme(currentThemeId());
-  for (const [name, value] of Object.entries(theme?.variables || {})) {
-    if (/^--tepuy-[a-z0-9-]+$/.test(name) && /^[#a-zA-Z0-9(),.%\s-]+$/.test(String(value))) {
-      section.style.setProperty(name, String(value));
-    }
-  }
   const scroller = document.createElement('div');
   scroller.className = 'tepuy-canvas__scroll';
   section.append(scroller);

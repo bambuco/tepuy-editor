@@ -158,6 +158,14 @@ export function readMetadataNode(node) {
     const match = text.match(/^(\d+(?:[.,]\d+)?)/);
     return { value: match ? match[1] : '', ...(unit ? { unit } : {}) };
   }
+  if (kind === 'select') {
+    const options = getMetadataField(key)?.options || [];
+    const stored = node.attrs?.['data-value'] || '';
+    if (options.includes(stored)) {
+      return { value: stored, ...(unit ? { unit } : {}) };
+    }
+    return { value: options.includes(text) ? text : '', ...(unit ? { unit } : {}) };
+  }
   return { value: text, ...(unit ? { unit } : {}) };
 }
 
@@ -232,6 +240,7 @@ export function writeMetadataNode(node, value, unit, Parser = globalThis.DOMPars
   const key = node.attrs?.['data-key'] || '';
   const kind = resolveMetadataKind(key);
   const attrs = { ...node.attrs, class: 'metadata', 'data-key': key };
+  delete attrs['data-value'];
   if (kind === 'number') {
     const field = getMetadataField(key);
     const nextUnit = unit || node.attrs?.['data-unit'] || field?.defaultUnit || 'hours';
@@ -245,6 +254,19 @@ export function writeMetadataNode(node, value, unit, Parser = globalThis.DOMPars
     return;
   }
   delete attrs['data-unit'];
+  if (kind === 'select') {
+    const canonical = String(value ?? '').trim();
+    const known = Boolean(getMetadataField(key)?.options?.includes(canonical));
+    if (known) {
+      attrs['data-value'] = canonical;
+    }
+    node.attrs = attrs;
+    const labelKey = `metadata.option.${key}.${canonical}`;
+    const label = t(labelKey);
+    const text = known && label !== labelKey ? label : canonical;
+    node.children = text ? [{ type: 'text', text }] : [];
+    return;
+  }
   node.attrs = attrs;
   if (kind === 'rich') {
     node.children = sanitizeHtml(value || '', 'rich', Parser);
@@ -323,6 +345,89 @@ ${themeMeta}  <title>${escapeHtml(index.title || '')}</title>
 ${inner ? `${inner}\n` : ''}</body>
 </html>
 `;
+}
+
+/**
+ * @param {Node|null|undefined} node Content node.
+ * @returns {string} Text carried by the node.
+ */
+function visibleText(node) {
+  if (!node || node.type === 'comment') {
+    return '';
+  }
+  if (node.type === 'text') {
+    return node.text || '';
+  }
+  return (node.children || []).map((child) => visibleText(child)).join('');
+}
+
+/**
+ * @param {Node} node Metadata node.
+ * @returns {boolean} Whether the marker has no visible value.
+ */
+function metadataIsBlank(node) {
+  const key = node.attrs?.['data-key'] || '';
+  if (resolveMetadataKind(key) === 'rich') {
+    return !visibleText(node).trim();
+  }
+  return !String(readMetadataNode(node).value || '').trim();
+}
+
+/**
+ * @param {Node} body Index body.
+ * @returns {Map<string, boolean>} True when every marker for that key is blank.
+ */
+function blankMetadataKeys(body) {
+  /** @type {Map<string, boolean>} */
+  const blank = new Map();
+  for (const item of listMetadataNodes(body)) {
+    const isBlank = metadataIsBlank(item.node);
+    blank.set(item.key, blank.has(item.key) ? Boolean(blank.get(item.key)) && isBlank : isBlank);
+  }
+  return blank;
+}
+
+/**
+ * @param {Node} node Content node.
+ * @param {Map<string, boolean>} blank Keys that have no visible value.
+ * @returns {Node} Node without empty related labels.
+ */
+function withoutEmptyRelated(node, blank) {
+  if (node.type === 'text' || node.type === 'comment') {
+    return node;
+  }
+  const children = (node.children || [])
+    .map((child) => withoutEmptyRelated(child, blank))
+    .filter((child) => {
+      if (child.type === 'text' || child.type === 'comment') {
+        return true;
+      }
+      const related = child.attrs?.['data-relatedto'];
+      return !related || blank.get(related) === false;
+    });
+  return { ...node, children };
+}
+
+/**
+ * Drops [data-relatedto] elements whose metadata has no visible value.
+ * A missing key counts as empty. The source tree is left unchanged.
+ * @param {Node} body Index body.
+ * @returns {Node} Independent body for presentation output.
+ */
+export function omitEmptyRelated(body) {
+  const copy = structuredClone(body);
+  return withoutEmptyRelated(copy, blankMetadataKeys(copy));
+}
+
+/**
+ * @param {IndexDocument} index Parsed index.
+ * @returns {string} index.html for preview and the saved package, without orphan labels.
+ */
+export function serializePresentation(index) {
+  return serializeIndexDocument({
+    ...index,
+    body: omitEmptyRelated(index.body),
+  });
 }
 
 /**
