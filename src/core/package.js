@@ -5,7 +5,9 @@
  * @license http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
+import { DEFAULT_LANGUAGE, languageCodes } from '../tepuy/lang/index.js';
 import { emptyMainMenu, ensureMainMenuFromPages } from './menu.js';
+import { applyMetadataValues } from '../metadata/index-document.js';
 import { parseContentHtml, parseGlobalPagesHtml, parseMainMenuHtml } from './parser.js';
 import { serializeContent } from './serializer.js';
 import { themeContentTemplate } from './themes.js';
@@ -23,7 +25,7 @@ function pagesFromMain(main) {
 
 /** @type {Object<string, string>} Values used when an attribute is absent. */
 export const PACKAGE_DEFAULTS = {
-  lang: 'es',
+  lang: DEFAULT_LANGUAGE,
   title: '',
   single: 'false',
   displayMode: 'onlypages',
@@ -87,7 +89,7 @@ export function packageSettings(input = {}, strict = false) {
     settings[name] = value;
   }
   const lang = source.lang === undefined || source.lang === '' ? PACKAGE_DEFAULTS.lang : String(source.lang);
-  if (!/^[a-z]{2}$/.test(lang)) {
+  if (!languageCodes().includes(lang)) {
     if (strict) {
       return null;
     }
@@ -155,7 +157,7 @@ export function settingsFields(settings) {
     settingField('activitiesPercentage', values.activitiesPercentage),
     settingField('model', values.model, ['scorm', 'page']),
     settingField('mobileMode', values.mobileMode),
-    settingField('lang', values.lang),
+    settingField('lang', values.lang, languageCodes()),
     settingField('title', values.title),
     settingField('single', values.single, ['false', 'true']),
     settingField('menu', values.menu, ['default', 'pills', 'tabs', 'horizontal', 'vertical']),
@@ -307,10 +309,40 @@ function citationInnerHtml(references) {
   }).join('');
 }
 
+const VOID_HEAD_TAGS = new Set(['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'source', 'track', 'wbr']);
+
+/**
+ * @param {Element|null|undefined} element Candidate.
+ * @returns {boolean} Whether the element is a metadata marker.
+ */
+function isMetadataMarker(element) {
+  if (!element) {
+    return false;
+  }
+  const classes = new Set((element.getAttribute('class') || '').split(/\s+/).filter(Boolean));
+  return classes.has('metadata') && element.hasAttribute('data-key');
+}
+
+/**
+ * @param {Element} element Head element that must survive the rebuilt head.
+ * @returns {string} Indented HTML.
+ */
+function serializeKeptHeadElement(element) {
+  const tag = element.tagName.toLowerCase();
+  const attrs = [...element.attributes]
+    .sort((left, right) => left.name.localeCompare(right.name))
+    .map((attribute) => ` ${attribute.name}="${escapeHtml(attribute.value)}"`)
+    .join('');
+  if (VOID_HEAD_TAGS.has(tag)) {
+    return `  <${tag}${attrs}>`;
+  }
+  return `  <${tag}${attrs}>${element.innerHTML}</${tag}>`;
+}
+
 /**
  * Fills editable surfaces into a theme content.html shell, keeping other body regions.
  * @param {string} shellHtml Theme or package content shell.
- * @param {{main: import('./parser.js').Node, mainMenu?: import('./parser.js').Node, globalPages?: import('./parser.js').Node, settings?: Object<string, string>, references?: Array, themeId?: string, themeVersion?: string, format?: string}} options Surfaces and stamp.
+ * @param {{main: import('./parser.js').Node, mainMenu?: import('./parser.js').Node, globalPages?: import('./parser.js').Node, settings?: Object<string, string>, references?: Array, themeId?: string, themeVersion?: string, format?: string, metadata?: Object<string, {value?: string, unit?: string}>}} options Surfaces and stamp.
  * @param {typeof DOMParser} [Parser] DOM parser constructor.
  * @returns {string} Canonical content.html.
  */
@@ -361,13 +393,32 @@ export function fillContentShell(shellHtml, options = {}, Parser = globalThis.DO
     }
   }
 
+  if (options.metadata) {
+    applyMetadataValues(document, options.metadata, Parser);
+  }
+
+  const titleEl = document.querySelector('title');
   const head = ['  <meta charset="utf-8">'];
   if (themeId) {
     head.push(`  <meta name="tepuy-theme" content="${escapeHtml(themeId)}@${escapeHtml(themeVersion)}">`);
     head.push(`  <meta name="tepuy-version" content="${escapeHtml(format)}">`);
   }
-  head.push(`  <title>${escapeHtml(complete.title)}</title>`);
+  if (isMetadataMarker(titleEl)) {
+    head.push(serializeKeptHeadElement(titleEl));
+  }
+  else {
+    head.push(`  <title>${escapeHtml(complete.title)}</title>`);
+  }
+  for (const element of document.querySelectorAll('head .metadata[data-key]')) {
+    if (element === titleEl || element === document.documentElement || element === document.body) {
+      continue;
+    }
+    head.push(serializeKeptHeadElement(element));
+  }
   for (const link of document.querySelectorAll('head link[rel="stylesheet"]')) {
+    if (isMetadataMarker(link)) {
+      continue;
+    }
     const href = link.getAttribute('href');
     if (href) {
       head.push(`  <link rel="stylesheet" href="${escapeHtml(href)}">`);
@@ -403,7 +454,7 @@ ${bodyHtml}
  * Writes content.html from the theme shell without presentation markup.
  * @param {import('./parser.js').Node} main Parsed main element.
  * @param {Object<string, string>} settings Package settings.
- * @param {{themeId?: string, themeVersion?: string, format?: string, mainMenu?: import('./parser.js').Node, globalPages?: import('./parser.js').Node, references?: Array, shell?: string}} [meta] Theme stamp and optional surfaces.
+ * @param {{themeId?: string, themeVersion?: string, format?: string, mainMenu?: import('./parser.js').Node, globalPages?: import('./parser.js').Node, references?: Array, shell?: string, metadata?: Object<string, {value?: string, unit?: string}>}} [meta] Theme stamp and optional surfaces.
  * @param {typeof DOMParser} [Parser] DOM parser constructor.
  * @returns {string} Canonical content.html.
  */
@@ -420,5 +471,6 @@ export function serializePackage(main, settings, meta = {}, Parser = globalThis.
     themeId: meta.themeId,
     themeVersion: meta.themeVersion,
     format: meta.format,
+    metadata: meta.metadata,
   }, Parser);
 }

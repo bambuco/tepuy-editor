@@ -22,6 +22,17 @@ import {
 } from '../controls/library.js';
 import { editableValue, nodeAt } from '../core/edit.js';
 import { HostError } from '../core/host.js';
+import {
+  baseStrings,
+  diffOverrides,
+  languageCodes,
+  migrateLegacyLanguage,
+  parseOverrides,
+  scriptLanguage,
+  serializeBase,
+  serializeOverrides,
+} from '../tepuy/lang/index.js';
+import { buildScorm12Manifest } from '../tepuy/scorm/manifest.js';
 import { createDocumentHistory } from '../core/history.js';
 import {
   addMainMenuItem,
@@ -105,6 +116,10 @@ let logStamp = 0;
 let logLoading = null;
 /** @type {Map<string, {original: string, value: string}>} */
 const customDrafts = new Map();
+/** @type {Map<string, {path: string, content: string}>} Language files already stored in the package. */
+const savedLangFiles = new Map();
+/** @type {string|null} Last imsmanifest.xml written for this package. */
+let savedManifest = null;
 /** @type {string|null} */
 let activePageId = null;
 
@@ -149,15 +164,18 @@ function packageState(document, themeId, settings, mainMenu, globalPages, index)
  * @param {string} themeId Active theme.
  * @param {import('../core/parser.js').Node} [mainMenu] Main menu tree.
  * @param {import('../core/parser.js').Node} [globalPages] Global pages container.
+ * @param {import('../metadata/index-document.js').IndexDocument} [index] Index whose values fill existing content markers.
  * @returns {string} HTML stored for this package.
  */
-function packageHtml(document, settings, themeId, mainMenu, globalPages) {
+function packageHtml(document, settings, themeId, mainMenu, globalPages, index) {
+  const source = index || currentIndexDocument();
   return serializePackage(document, settings, {
     themeId,
     themeVersion: '1.0.0',
     format: '2.0',
     mainMenu: mainMenu || emptyMainMenu(themeId),
     globalPages: globalPages || emptyGlobalPages(),
+    metadata: readMetadata(source.body),
   });
 }
 
@@ -187,7 +205,7 @@ function documentHistory() {
     const settings = readPackageSettings(SAMPLE_CONTENT);
     const index = seedIndex('base', settings, SAMPLE_CONTENT);
     history = createDocumentHistory(packageState(main, 'base', settings, mainMenu, globalPages, index));
-    savedHtml = packageHtml(main, settings, 'base', mainMenu, globalPages);
+    savedHtml = packageHtml(main, settings, 'base', mainMenu, globalPages, index);
     savedIndexHtml = indexHtml(index);
     activePageId = pagesFirstId(mainMenu, main);
   }
@@ -709,6 +727,61 @@ export function indexDraft() {
 }
 
 /**
+ * @param {{mode: 'table', cells: Object<string, string>}|{mode: 'raw', source: string}} pending Language text waiting for Apply.
+ * @returns {boolean} Whether the cells match the applied custom/lang.js.
+ */
+function sameLangDraft(pending) {
+  if (pending.mode === 'raw') {
+    return (customValue('custom/lang.js') || '') === String(pending.source || '');
+  }
+  const applied = new Map(langTable().rows.map((row) => [row.key, row.custom]));
+  const cells = pending.cells || {};
+  const keys = new Set([...applied.keys(), ...Object.keys(cells)]);
+  for (const key of keys) {
+    if ((cells[key] || '') !== (applied.get(key) || '')) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * Keeps language text out of custom/lang.js until Apply.
+ * @param {{mode: 'table', cells: Object<string, string>}|{mode: 'raw', source: string}} pending Typed language values.
+ * @returns {boolean} False when another draft is open.
+ */
+export function setLangDraft(pending) {
+  if (draft && draft.kind !== 'lang') {
+    return false;
+  }
+  if (sameLangDraft(pending)) {
+    if (draft?.kind === 'lang') {
+      draft = null;
+      publish();
+    }
+    return true;
+  }
+  draft = pending.mode === 'raw'
+    ? { kind: 'lang', mode: 'raw', source: String(pending.source || '') }
+    : { kind: 'lang', mode: 'table', cells: { ...pending.cells } };
+  publish();
+  return true;
+}
+
+/**
+ * @returns {{mode: 'table', cells: Object<string, string>}|{mode: 'raw', source: string}|null} Pending language text.
+ */
+export function langDraft() {
+  if (!draft || draft.kind !== 'lang') {
+    return null;
+  }
+  if (draft.mode === 'raw') {
+    return { mode: 'raw', source: draft.source };
+  }
+  return { mode: 'table', cells: { ...draft.cells } };
+}
+
+/**
  * @param {number[]} path Child indexes from the content root.
  * @param {Object<string, string>} fields Values waiting for Apply.
  * @returns {void}
@@ -746,7 +819,7 @@ export function setSettingsDraft(fields) {
 }
 
 /**
- * @returns {'node'|'settings'|'html'|null} Draft being edited.
+ * @returns {'node'|'settings'|'html'|'index'|'lang'|null} Draft being edited.
  */
 export function draftKind() {
   return draft?.kind || null;
@@ -786,12 +859,37 @@ export function applyDraft() {
     publish();
     return 'applied';
   }
+  if (draft.kind === 'lang') {
+    const pending = draft;
+    draft = null;
+    if (pending.mode === 'raw') {
+      if (customValue('custom/lang.js') === undefined) {
+        rememberCustom('custom/lang.js', '');
+      }
+      updateCustom('custom/lang.js', pending.source || '');
+    }
+    else {
+      applyLangOverrides(pending.cells || {});
+    }
+    publish();
+    return 'applied';
+  }
   if (draft.kind === 'settings') {
     const next = packageSettings(draft.fields, true);
     if (!next) {
       return 'invalid';
     }
-    replaceDocument(currentDocument(), currentThemeId(), { settings: next, keepSelection: true, keepInsertion: true });
+    const index = cloneIndexDocument(currentIndexDocument());
+    index.lang = next.lang;
+    if (next.lang !== currentSettings().lang) {
+      retargetLangOverrides(next.lang);
+    }
+    replaceDocument(currentDocument(), currentThemeId(), {
+      settings: next,
+      index,
+      keepSelection: true,
+      keepInsertion: true,
+    });
     void recordOperation('settings', 'package', 'settings');
     return 'applied';
   }
@@ -956,7 +1054,7 @@ export function replaceDocument(next, themeId = currentThemeId(), options = {}) 
     insertion = null;
   }
   if (options.markSaved) {
-    savedHtml = packageHtml(next, settings, themeId, mainMenu, globalPages);
+    savedHtml = packageHtml(next, settings, themeId, mainMenu, globalPages, index);
     savedIndexHtml = indexHtml(index);
   }
   publish();
@@ -1219,9 +1317,85 @@ export function rememberCustom(path, original) {
 export function updateCustom(path, value) {
   const current = customDrafts.get(path) || { original: '', value: '' };
   customDrafts.set(path, { original: current.original, value });
-  if (path === 'custom/default.css' || path === 'custom/mobile.css') {
+  if (path === 'custom/default.css' || path === 'custom/mobile.css' || path === 'custom/lang.js') {
     notifyPreview();
   }
+}
+
+/**
+ * @param {string} lang Language the overrides will be compared with.
+ * @returns {void}
+ */
+function retargetLangOverrides(lang) {
+  const raw = customValue('custom/lang.js');
+  if (!raw) {
+    return;
+  }
+  const parsed = parseOverrides(raw);
+  if (!parsed.ok) {
+    return;
+  }
+  const diff = diffOverrides(baseStrings(lang) || {}, parsed.overrides);
+  const source = Object.keys(diff).length ? serializeOverrides(diff) : '';
+  if (source !== raw) {
+    updateCustom('custom/lang.js', source);
+  }
+}
+
+/**
+ * @returns {{unreadable: boolean, rows: Array<{key: string, base: string, custom: string}>}} Table for the active language.
+ */
+export function langTable() {
+  const base = baseStrings(currentSettings().lang) || {};
+  const raw = customValue('custom/lang.js') || '';
+  const parsed = parseOverrides(raw);
+  const overrides = parsed.ok ? parsed.overrides : {};
+  return {
+    unreadable: Boolean(raw.trim()) && !parsed.ok,
+    rows: Object.keys(base).sort().map((key) => ({
+      key,
+      base: base[key],
+      custom: overrides[key] && overrides[key] !== base[key] ? overrides[key] : '',
+    })),
+  };
+}
+
+/**
+ * @param {Object<string, string>} cells Custom text keyed by catalog key. Empty restores the base.
+ * @returns {void}
+ */
+export function applyLangOverrides(cells) {
+  const lang = currentSettings().lang;
+  const base = baseStrings(lang) || {};
+  const raw = customValue('custom/lang.js') || '';
+  const parsed = parseOverrides(raw);
+  const next = parsed.ok ? { ...parsed.overrides } : {};
+  for (const [key, value] of Object.entries(cells || {})) {
+    if (!value || value === base[key]) {
+      delete next[key];
+    }
+    else {
+      next[key] = value;
+    }
+  }
+  const diff = diffOverrides(base, next);
+  if (customValue('custom/lang.js') === undefined) {
+    rememberCustom('custom/lang.js', '');
+  }
+  updateCustom('custom/lang.js', Object.keys(diff).length ? serializeOverrides(diff) : '');
+}
+
+/**
+ * @returns {string} SCORM manifest whose language is the package language.
+ */
+export function currentPackageManifest() {
+  const settings = currentSettings();
+  return buildScorm12Manifest({
+    identifier: packageRef || 'TEPUY',
+    title: settings.title || packageName || 'Paquete',
+    description: '',
+    language: settings.lang,
+  });
 }
 
 /** @type {Object<string, string>} Resource name to a content/ path. */
@@ -1318,7 +1492,7 @@ export async function ensureContentDataUrl(path) {
  * @returns {void}
  */
 export function ensurePreviewSources() {
-  for (const path of ['custom/default.css', 'custom/mobile.css']) {
+  for (const path of ['custom/default.css', 'custom/mobile.css', 'custom/lang.js']) {
     if (customValue(path) !== undefined) {
       continue;
     }
@@ -1442,7 +1616,7 @@ function installDocument(document, themeId, settings, markSaved, mainMenu, globa
   htmlFocus = null;
   activePageId = pagesFirstId(menu, document);
   if (markSaved) {
-    savedHtml = packageHtml(document, settings, themeId, menu, globals);
+    savedHtml = packageHtml(document, settings, themeId, menu, globals, indexDoc);
     savedIndexHtml = indexHtml(indexDoc);
   }
   publish();
@@ -1503,6 +1677,8 @@ export async function createHostPackage(name) {
   const title = name || 'Paquete';
   const settings = packageSettings({ title });
   customDrafts.clear();
+  savedLangFiles.clear();
+  savedManifest = null;
   remoteLog = [];
   localLog = [];
   logStamp = 0;
@@ -1557,6 +1733,8 @@ export async function openHostPackage(ref) {
   revision = opened.revision;
   packageName = opened.name;
   customDrafts.clear();
+  savedLangFiles.clear();
+  savedManifest = null;
   remoteLog = [];
   logStamp = 0;
   if (!html) {
@@ -1575,11 +1753,27 @@ export async function openHostPackage(ref) {
   else {
     const themeId = readPackageTheme(html);
     const settings = readPackageSettings(html);
+    const diskLang = settings.lang;
+    if (!declaredPackageLang(html)) {
+      const fromScript = scriptLanguage(html);
+      if (fromScript) {
+        settings.lang = fromScript;
+      }
+    }
+    await absorbPackageLanguage(html, settings);
     const { main, mainMenu, globalPages } = readPackageContent(html, themeId);
     const index = indexSource
       ? restoreIndex(themeId, parseIndexHtml(indexSource))
       : migrateToMetadataIndex(themeIndexTemplate(themeId), { themeId, themeVersion: '1.0.0' }, html, settings);
+    const diskIndexHtml = indexHtml(index);
+    index.lang = settings.lang;
     installDocument(main, themeId, settings, true, mainMenu, globalPages, index);
+    if (settings.lang !== diskLang) {
+      savedHtml = packageHtml(main, { ...settings, lang: diskLang }, themeId, mainMenu, globalPages, index);
+    }
+    if (indexHtml(index) !== diskIndexHtml) {
+      savedIndexHtml = diskIndexHtml;
+    }
   }
   hostHtml = savedHtml;
   hostIndexHtml = savedIndexHtml;
@@ -1598,8 +1792,8 @@ export async function saveToHost() {
   const html = packageHtml(currentDocument(), currentSettings(), currentThemeId(), currentMainMenu(), currentGlobalPages());
   const index = indexHtml(currentIndexDocument());
   const presentation = serializePresentation(currentIndexDocument());
-  const extra = customChanges();
   if (!host) {
+    const extra = packageFileChanges();
     if (html === savedHtml && index === savedIndexHtml && extra.length === 0) {
       return 'unchanged';
     }
@@ -1608,10 +1802,8 @@ export async function saveToHost() {
     hostHtml = html;
     hostIndexHtml = index;
     acceptCustom();
+    acceptPackageFiles(extra);
     return 'saved';
-  }
-  if (html === hostHtml && index === hostIndexHtml && extra.length === 0 && packageRef) {
-    return 'unchanged';
   }
   if (!packageRef) {
     const created = await host.create({
@@ -1622,6 +1814,10 @@ export async function saveToHost() {
     revision = created.revision;
     packageName = created.name;
     await recordOperation('create', created.ref, created.name);
+  }
+  const extra = packageFileChanges();
+  if (html === hostHtml && index === hostIndexHtml && extra.length === 0) {
+    return 'unchanged';
   }
   try {
     const result = await host.commit(packageRef, [
@@ -1635,6 +1831,7 @@ export async function saveToHost() {
     hostHtml = html;
     hostIndexHtml = index;
     acceptCustom();
+    acceptPackageFiles(extra);
     if (extra.length) {
       await recordOperation('custom', extra.map((change) => change.path).join(', '), extra.map((change) => change.path).join(', '));
     }
@@ -1722,11 +1919,143 @@ async function actor() {
 function customChanges() {
   const changes = [];
   for (const [path, file] of customDrafts) {
-    if (file.value !== file.original && path.startsWith('custom/')) {
-      changes.push({ op: 'write', path, content: file.value });
+    if (file.value === file.original || !path.startsWith('custom/')) {
+      continue;
     }
+    if (path === 'custom/lang.js' && file.value === '') {
+      if (file.original) {
+        changes.push({ op: 'delete', path });
+      }
+      continue;
+    }
+    changes.push({ op: 'write', path, content: file.value });
   }
   return changes;
+}
+
+/**
+ * @param {string} html Package HTML.
+ * @returns {string} lang attribute on the root element, or empty when it is absent.
+ */
+function declaredPackageLang(html) {
+  const match = String(html || '').match(/<html\b[^>]*\slang="([^"]+)"/i);
+  return match ? match[1].trim().toLowerCase() : '';
+}
+
+/**
+ * @param {string} path Package path.
+ * @returns {Promise<string|null>} File text, or null when the path is absent.
+ */
+async function readOptional(path) {
+  if (!host || !packageRef) {
+    return null;
+  }
+  try {
+    return await host.read(packageRef, path);
+  }
+  catch (error) {
+    if (error instanceof HostError && error.code === 'not_found') {
+      return null;
+    }
+    throw error;
+  }
+}
+
+/**
+ * Reads engine language files and folds legacy differences into custom/lang.js.
+ * @param {string} html content.html source.
+ * @param {Object<string, string>} settings Package settings being opened.
+ * @returns {Promise<void>}
+ */
+async function absorbPackageLanguage(html, settings) {
+  for (const code of languageCodes()) {
+    const modern = await readOptional(`tepuy/lang.${code}.js`);
+    const legacy = modern === null ? await readOptional(`js/lang.${code}.js`) : null;
+    const text = modern ?? legacy;
+    if (text !== null) {
+      savedLangFiles.set(code, {
+        path: modern !== null ? `tepuy/lang.${code}.js` : `js/lang.${code}.js`,
+        content: text,
+      });
+    }
+  }
+  const manifest = await readOptional('imsmanifest.xml');
+  if (manifest !== null) {
+    savedManifest = manifest;
+  }
+  const custom = await readOptional('custom/lang.js');
+  if (custom !== null) {
+    rememberCustom('custom/lang.js', custom);
+    return;
+  }
+  const legacyCustom = await readOptional('custom.lang.js') ?? await readOptional('js/custom.lang.js');
+  const storedBase = savedLangFiles.get(settings.lang)?.content || '';
+  const canonical = serializeBase(settings.lang) || '';
+  const legacyBase = storedBase && storedBase !== canonical ? storedBase : '';
+  if (!legacyBase && !legacyCustom) {
+    return;
+  }
+  const migrated = migrateLegacyLanguage({
+    htmlLang: settings.lang,
+    scriptSrc: scriptLanguage(html),
+    legacyBase,
+    legacyCustom: legacyCustom || '',
+  });
+  if (migrated.unreadable && legacyCustom) {
+    rememberCustom('custom/lang.js', legacyCustom);
+    return;
+  }
+  if (migrated.source) {
+    rememberCustom('custom/lang.js', '');
+    updateCustom('custom/lang.js', migrated.source);
+  }
+}
+
+/**
+ * @returns {Array<{op: string, path: string, content?: string}>} Language files and the manifest.
+ */
+function packageFileChanges() {
+  retargetLangOverrides(currentSettings().lang);
+  const changes = customChanges();
+  const lang = currentSettings().lang;
+  const base = serializeBase(lang);
+  const activePath = `tepuy/lang.${lang}.js`;
+  const stored = savedLangFiles.get(lang);
+  if (base && (!stored || stored.content !== base || stored.path !== activePath)) {
+    changes.push({ op: 'write', path: activePath, content: base });
+    if (stored && stored.path !== activePath) {
+      changes.push({ op: 'delete', path: stored.path });
+    }
+  }
+  for (const [code, file] of savedLangFiles) {
+    if (code !== lang) {
+      changes.push({ op: 'delete', path: file.path });
+    }
+  }
+  const manifest = currentPackageManifest();
+  if (manifest !== savedManifest) {
+    changes.push({ op: 'write', path: 'imsmanifest.xml', content: manifest });
+  }
+  return changes;
+}
+
+/**
+ * @param {Array<{op: string, path: string, content?: string}>} changes Files just written.
+ * @returns {void}
+ */
+function acceptPackageFiles(changes) {
+  for (const change of changes) {
+    const code = change.path.match(/(?:^|\/)lang\.([a-z]{2})\.js$/)?.[1];
+    if (code && change.op === 'delete' && savedLangFiles.get(code)?.path === change.path) {
+      savedLangFiles.delete(code);
+    }
+    if (code && change.op === 'write') {
+      savedLangFiles.set(code, { path: change.path, content: change.content || '' });
+    }
+    if (change.path === 'imsmanifest.xml' && change.op === 'write') {
+      savedManifest = change.content || '';
+    }
+  }
 }
 
 /**

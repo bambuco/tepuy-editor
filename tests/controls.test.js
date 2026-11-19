@@ -194,7 +194,8 @@ test('the preview shows layout, citations, device visibility, and the start butt
   });
   assert.match(presentation, /id="play_scorm"/);
   assert.match(presentation, /En ejecución esta página se omite/);
-  assert.doesNotMatch(presentation, /<script/i);
+  assert.match(presentation, /dhbgApp\.strings/);
+  assert.doesNotMatch(presentation, /<script src=/i);
 });
 
 /**

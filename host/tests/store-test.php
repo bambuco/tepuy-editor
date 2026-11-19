@@ -78,17 +78,22 @@ fails(fn () => $store->commit($created['ref'], [
     ['op' => 'write', 'path' => 'content.html', 'content' => 'should-not-land'],
 ], '1'), 'invalid');
 check($store->read($created['ref'], 'content.html')['content'] === "<main>uno</main>\n", 'rejected commit writes nothing');
+$withLang = $store->commit($created['ref'], [
+    ['op' => 'write', 'path' => 'tepuy/lang.es.js', 'content' => 'dhbgApp.strings = {};'],
+], '1');
+check($withLang['revision'] === '2', 'package language file can be written');
+check($store->read($created['ref'], 'tepuy/lang.es.js')['content'] === 'dhbgApp.strings = {};', 'package language file can be read');
 
 fails(fn () => $store->commit($created['ref'], [
     ['op' => 'write', 'path' => 'content.html', 'content' => str_repeat('x', 65)],
-], '1'), 'too_large');
+], '2'), 'too_large');
 
 $upload = $store->tempUpload($created['ref'], 'Foto.PNG', 'png-bytes');
 check($upload['path'] === 'content/foto.png', 'upload name is normalized');
 $withFile = $store->commit($created['ref'], [
     ['op' => 'write', 'path' => $upload['path'], 'tempId' => $upload['tempId']],
-], '1');
-check($withFile['revision'] === '2', 'adopting an upload advances the revision');
+], '2');
+check($withFile['revision'] === '3', 'adopting an upload advances the revision');
 check($store->read($created['ref'], 'content/foto.png')['content'] === 'png-bytes', 'upload lands in content');
 
 $store->appendLog($created['ref'], [[

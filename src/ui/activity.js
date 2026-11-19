@@ -20,14 +20,19 @@ import { nodeAt } from '../core/edit.js';
 import { serializePackage, settingsFields } from '../core/package.js';
 import { buildPreviewHtml } from '../core/preview.js';
 import { findTheme, themeAssetBase, themeStylesheet } from '../core/themes.js';
-import { serializePresentation } from '../metadata/index-document.js';
+import { readMetadata, serializePresentation } from '../metadata/index-document.js';
 import { filterLog } from '../core/host.js';
 import { t } from '../i18n/messages.js';
 import { renderCanvas } from './canvas.js';
 import { CONTROL_GROUPS, controlLabel, groupLabel } from './catalog.js';
 import {
+  applyDraft,
   auditEntries,
   auditNeedsLoad,
+  cancelDraft,
+  draftKind,
+  langDraft,
+  langTable,
   currentControlTree,
   currentDocument,
   currentEditor,
@@ -48,7 +53,6 @@ import {
   customValue,
   ensurePreviewSources,
   draftFields,
-  draftKind,
   hasDraft,
   hostFiles,
   hostPackages,
@@ -60,6 +64,7 @@ import {
   refreshLog,
   selectNode,
   selectedContentRoot,
+  setLangDraft,
   setNodeDraft,
   setPackageView,
   setSettingsDraft,
@@ -540,6 +545,10 @@ function filterField(key, type, value, onInput) {
  * @returns {void}
  */
 function openCommonFile(context, file) {
+  if (file.id === 'lang') {
+    openLangFile(context, file);
+    return;
+  }
   const editor = currentEditor();
   if (openedDocuments.has(file.id) && editor) {
     editor.workbench.openDocument(`${context.extensionId}:${file.id}`);
@@ -569,6 +578,210 @@ function openCommonFile(context, file) {
       }
       const wrap = document.createElement('section');
       wrap.append(note, field);
+      return wrap;
+    },
+  });
+  openedDocuments.add(file.id);
+}
+
+/**
+ * @param {HTMLElement} wrap Language editor root.
+ * @returns {Object<string, string>} Custom texts currently shown in the table.
+ */
+function readLangCells(wrap) {
+  /** @type {Object<string, string>} */
+  const cells = {};
+  for (const item of wrap.querySelectorAll('input[data-lang-key]')) {
+    cells[item.dataset.langKey] = item.value;
+  }
+  return cells;
+}
+
+/**
+ * @param {HTMLElement} wrap Language editor root.
+ * @returns {HTMLElement|null} Field being typed inside the editor, including a shadow root.
+ */
+function focusedLangField(wrap) {
+  const root = wrap.getRootNode();
+  const active = root instanceof ShadowRoot ? root.activeElement : wrap.ownerDocument?.activeElement;
+  if (!(active instanceof HTMLElement) || !wrap.contains(active) || !active.matches('input, textarea')) {
+    return null;
+  }
+  return active;
+}
+
+/**
+ * Enables Apply and Cancel only while language text is waiting.
+ * @param {HTMLElement} wrap Language editor root.
+ * @returns {void}
+ */
+function paintLangActions(wrap) {
+  const bar = wrap.querySelector('.tepuy-lang-actions');
+  if (!(bar instanceof HTMLElement)) {
+    return;
+  }
+  const dirty = draftKind() === 'lang';
+  bar.classList.toggle('is-active', dirty);
+  for (const button of bar.querySelectorAll('button')) {
+    button.disabled = !dirty;
+  }
+}
+
+/**
+ * @param {HTMLElement} wrap Language editor root.
+ * @returns {HTMLElement} Apply and Cancel bar.
+ */
+function langActionBar(wrap) {
+  const bar = document.createElement('div');
+  bar.className = 'tepuy-lang-actions';
+  const apply = document.createElement('button');
+  apply.type = 'button';
+  apply.textContent = t('menu.edit.apply');
+  apply.addEventListener('click', () => {
+    if (applyDraft() === 'invalid') {
+      currentEditor()?.notify?.(t('menu.notice.invalid'), 'info');
+    }
+    if (wrap.isConnected) {
+      paintLang(wrap);
+    }
+  });
+  const cancel = document.createElement('button');
+  cancel.type = 'button';
+  cancel.textContent = t('menu.edit.cancel');
+  cancel.addEventListener('click', () => {
+    cancelDraft();
+    if (wrap.isConnected) {
+      paintLang(wrap);
+    }
+  });
+  bar.append(apply, cancel);
+  return bar;
+}
+
+/**
+ * @returns {void}
+ */
+function notifyPending() {
+  currentEditor()?.notify?.(t('menu.notice.pending'), 'info');
+}
+
+/**
+ * @param {HTMLElement} wrap Language editor root.
+ * @returns {void}
+ */
+function paintLang(wrap) {
+  const pending = langDraft();
+  const raw = pending?.mode === 'raw' ? pending.source : (customValue('custom/lang.js') || '');
+  const table = langTable();
+  const unreadable = pending?.mode === 'raw' || (!pending && table.unreadable);
+  wrap.replaceChildren();
+  const body = document.createElement('div');
+  body.className = 'tepuy-lang__body';
+  if (unreadable) {
+    const note = document.createElement('p');
+    note.textContent = t('panel.lang-invalid');
+    const field = document.createElement('textarea');
+    field.rows = 16;
+    field.value = raw;
+    field.setAttribute('aria-label', 'custom/lang.js');
+    field.addEventListener('input', () => {
+      if (!setLangDraft({ mode: 'raw', source: field.value })) {
+        field.value = customValue('custom/lang.js') || '';
+        notifyPending();
+      }
+      paintLangActions(wrap);
+    });
+    body.append(note, field);
+  }
+  else {
+    const grid = document.createElement('table');
+    const head = document.createElement('tr');
+    for (const key of ['panel.lang-key', 'panel.lang-base', 'panel.lang-custom']) {
+      const cell = document.createElement('th');
+      cell.textContent = t(key);
+      head.append(cell);
+    }
+    const thead = document.createElement('thead');
+    thead.append(head);
+    const rows = document.createElement('tbody');
+    for (const row of table.rows) {
+      const line = document.createElement('tr');
+      const key = document.createElement('td');
+      key.textContent = row.key;
+      const base = document.createElement('td');
+      base.textContent = row.base;
+      const custom = document.createElement('td');
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.value = pending?.mode === 'table' && pending.cells[row.key] !== undefined
+        ? pending.cells[row.key]
+        : row.custom;
+      input.dataset.langKey = row.key;
+      input.setAttribute('aria-label', row.key);
+      input.addEventListener('input', () => {
+        if (!setLangDraft({ mode: 'table', cells: readLangCells(wrap) })) {
+          const applied = langTable().rows.find((item) => item.key === input.dataset.langKey);
+          input.value = applied?.custom || '';
+          notifyPending();
+        }
+        paintLangActions(wrap);
+      });
+      custom.append(input);
+      line.append(key, base, custom);
+      rows.append(line);
+    }
+    grid.append(thead, rows);
+    body.append(grid);
+  }
+  wrap.append(body, langActionBar(wrap));
+  paintLangActions(wrap);
+}
+
+/**
+ * @param {Object} context Edy extension context.
+ * @param {{id: string, titleKey: string, path: string}} file Language file.
+ * @returns {void}
+ */
+function openLangFile(context, file) {
+  const editor = currentEditor();
+  if (openedDocuments.has(file.id) && editor) {
+    editor.workbench.openDocument(`${context.extensionId}:${file.id}`);
+    return;
+  }
+  context.documents.open(file.id, {
+    title: file.path,
+    render: () => {
+      const wrap = document.createElement('section');
+      wrap.className = 'tepuy-lang';
+      const draw = () => paintLang(wrap);
+      draw();
+      if (customValue(file.path) === undefined) {
+        readCustom(file.path).then((text) => {
+          if (customValue(file.path) === undefined) {
+            rememberCustom(file.path, text);
+          }
+          if (wrap.isConnected) {
+            draw();
+          }
+        }).catch((error) => {
+          context.notifications.error(error, t('menu.notice.host-error'));
+        });
+      }
+      let attached = false;
+      const unsubscribe = subscribeSession(() => {
+        if (!wrap.isConnected) {
+          if (attached) {
+            unsubscribe();
+          }
+          return;
+        }
+        attached = true;
+        if (focusedLangField(wrap) && draftKind() === 'lang') {
+          paintLangActions(wrap);
+          return;
+        }
+        draw();
+      });
       return wrap;
     },
   });
@@ -874,6 +1087,7 @@ export function registerActivity(context) {
           mainMenu: currentMainMenu(),
           globalPages: currentGlobalPages(),
           references: collectReferences(documentNode),
+          metadata: readMetadata(index.body),
         }),
         themeCss: themeStylesheet(themeId),
         resources: theme?.resources || [],
@@ -882,6 +1096,7 @@ export function registerActivity(context) {
         contentUrls,
         desktopCss: customValue('custom/default.css') || '',
         mobileCss: customValue('custom/mobile.css') || '',
+        customLang: customValue('custom/lang.js') || '',
       });
       section.replaceChildren(frame);
     }),

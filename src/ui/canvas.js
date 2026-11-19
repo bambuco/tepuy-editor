@@ -995,7 +995,7 @@ export function renderCanvas(mode, context, options = {}) {
   function draw() {
     const focus = htmlFocusTarget();
     const key = focus ? focusKey(focus) : '';
-    if (mode === 'index' && indexForm?.isConnected && draftKind() === 'index') {
+    if (mode === 'index' && indexForm?.isConnected && (draftKind() === 'index' || draftKind() === 'lang')) {
       paintIndexActions();
       return;
     }

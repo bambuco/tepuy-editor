@@ -501,6 +501,9 @@ class TepuyStore
         $allowed = $relative === 'content.html'
             || $relative === 'index.html'
             || $relative === 'imsmanifest.xml'
+            || $relative === 'custom.lang.js'
+            || $relative === 'js/custom.lang.js'
+            || preg_match('#^(?:tepuy|js)/lang\.[a-z]{2}\.js$#', $relative) === 1
             || str_starts_with($relative, 'content/')
             || str_starts_with($relative, 'custom/')
             || str_starts_with($relative, 'theme/');

@@ -298,6 +298,91 @@ export function writeMetadataValue(body, key, value, unit, Parser = globalThis.D
 }
 
 /**
+ * @param {Element} element DOM element.
+ * @param {Object<string, string>} attrs Next attributes.
+ * @returns {void}
+ */
+function syncElementAttributes(element, attrs) {
+  for (const attribute of [...element.attributes]) {
+    if (!Object.prototype.hasOwnProperty.call(attrs, attribute.name)) {
+      element.removeAttribute(attribute.name);
+    }
+  }
+  for (const [name, attrValue] of Object.entries(attrs)) {
+    element.setAttribute(name, attrValue);
+  }
+}
+
+/**
+ * @param {Node} node Metadata node written by writeMetadataNode.
+ * @returns {string} Visible text, without markup.
+ */
+function metadataText(node) {
+  return (node.children || [])
+    .filter((child) => child.type === 'text')
+    .map((child) => child.text || '')
+    .join('');
+}
+
+/**
+ * Writes one index value onto a marker that already exists.
+ * Meta elements keep the visible text in the content attribute.
+ * @param {Element} element Metadata element.
+ * @param {string} value Next value.
+ * @param {string} [unit] Unit for number fields.
+ * @param {typeof DOMParser} [Parser] DOM parser.
+ * @returns {void}
+ */
+export function writeMetadataElement(element, value, unit, Parser = globalThis.DOMParser) {
+  const tag = element.tagName.toLowerCase();
+  const previousClass = element.getAttribute('class') || '';
+  const node = {
+    type: 'element',
+    tag,
+    attrs: readAttributes(element),
+    children: [],
+  };
+  writeMetadataNode(node, value, unit, Parser);
+  const classes = new Set(`${previousClass} metadata`.split(/\s+/).filter(Boolean));
+  node.attrs.class = [...classes].join(' ');
+  if (tag === 'meta') {
+    const kind = resolveMetadataKind(node.attrs['data-key'] || '');
+    node.attrs.content = kind === 'rich' ? serializeFragment(node.children || []) : metadataText(node);
+  }
+  syncElementAttributes(element, node.attrs);
+  if (tag !== 'meta') {
+    element.innerHTML = serializeFragment(node.children || []);
+  }
+}
+
+/**
+ * Copies index values onto metadata markers already present in a document.
+ * Keys that have no marker are not inserted. Markers whose key is absent
+ * from the map are left unchanged. The html and body elements are not markers.
+ * @param {Document} document Parsed content document.
+ * @param {Object<string, {value?: string, unit?: string}>|null|undefined} values Values by data-key.
+ * @param {typeof DOMParser} [Parser] DOM parser.
+ * @returns {void}
+ */
+export function applyMetadataValues(document, values, Parser = globalThis.DOMParser) {
+  if (!values) {
+    return;
+  }
+  const markers = document.querySelectorAll('.metadata[data-key]');
+  for (const element of markers) {
+    if (element === document.documentElement || element === document.body) {
+      continue;
+    }
+    const key = element.getAttribute('data-key') || '';
+    if (!Object.prototype.hasOwnProperty.call(values, key)) {
+      continue;
+    }
+    const payload = values[key] || {};
+    writeMetadataElement(element, payload.value ?? '', payload.unit, Parser);
+  }
+}
+
+/**
  * @param {string} html index.html source.
  * @param {typeof DOMParser} [Parser] DOM parser.
  * @returns {IndexDocument} Parsed index document.

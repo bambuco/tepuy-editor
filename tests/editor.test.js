@@ -57,7 +57,8 @@ test('the preview document is static and marks the mobile frame', () => {
   assert.match(html, /data-mobile-mode="true"/);
   assert.match(html, /--tepuy-color-bg: #abc;/);
   assert.doesNotMatch(html, /--bad/);
-  assert.doesNotMatch(html, /<script/i);
+  assert.equal(html.match(/<script>/g).length, 2);
+  assert.match(html, /dhbgApp\.strings = \{/);
 });
 
 test('the preview stacks variables, controls, theme assets, and one custom sheet', () => {
@@ -87,9 +88,11 @@ test('the preview stacks variables, controls, theme assets, and one custom sheet
   assert.match(desktop, /--tepuy-color-bg: #abc;/);
   assert.doesNotMatch(desktop, /--bad/);
   assert.doesNotMatch(desktop, /\.mobile/);
-  assert.doesNotMatch(desktop, /<script/i);
+  assert.doesNotMatch(desktop, /<script>alert\(1\)/);
+  assert.equal(desktop.match(/<script>/g).length, 2);
   const mobile = buildPreviewHtml({ ...shared, mobile: true });
   assert.match(mobile, /\.mobile/);
   assert.doesNotMatch(mobile, /\.desktop/);
-  assert.doesNotMatch(mobile, /<script/i);
+  assert.doesNotMatch(mobile, /<script>alert\(1\)/);
+  assert.equal(mobile.match(/<script>/g).length, 2);
 });

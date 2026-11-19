@@ -119,6 +119,79 @@ test('content.html no longer embeds presentation markup', () => {
   assert.match(saved, /id="tpy-measuring_progress"/);
 });
 
+test('content.html copies index metadata onto existing markers only', () => {
+  const shell = `<!DOCTYPE html><html lang="es"><head>
+    <meta charset="utf-8">
+    <meta name="description" class="metadata" data-key="description" content="plantilla">
+    <title>Tepuy</title>
+    <link rel="stylesheet" href="theme.css">
+  </head><body>
+    <h1 class="hero metadata" data-key="title">Título del recurso</h1>
+    <span class="metadata" data-key="title">Otro</span>
+    <h2 class="metadata" data-key="topic">Paquete de contenidos</h2>
+    <meta class="metadata" data-key="participation" name="audience">
+    <span class="metadata" data-key="extra">Se queda</span>
+    <main><section class="metadata" data-key="objective">En la página</section></main>
+  </body></html>`;
+  const main = parseContentHtml(shell, DOMParser);
+  const saved = serializePackage(main, { title: 'Curso' }, {
+    themeId: 'base',
+    shell,
+    metadata: {
+      title: { value: 'Curso RED' },
+      description: { value: '<p>Hola</p><script>x</script>' },
+      objective: { value: '<p>Meta</p>' },
+      duration: { value: '12', unit: 'hours' },
+      participation: { value: 'group' },
+      topic: { value: '' },
+    },
+  }, DOMParser);
+  const doc = new DOMParser().parseFromString(saved, 'text/html');
+  const titles = [...doc.querySelectorAll('[data-key="title"]')];
+  assert.equal(titles.length, 2);
+  assert.equal(titles.every((element) => element.textContent === 'Curso RED'), true);
+  assert.equal(doc.querySelector('h1').classList.contains('hero'), true);
+  assert.equal(doc.querySelector('[data-key="topic"]').textContent, '');
+  assert.equal(doc.querySelector('title').textContent, 'Curso');
+  assert.equal(doc.querySelector('head meta[data-key="description"]').getAttribute('content'), '<p>Hola</p>');
+  assert.equal(doc.querySelector('head meta[data-key="description"]').getAttribute('name'), 'description');
+  assert.equal(doc.querySelector('[data-key="objective"]').textContent, 'Meta');
+  assert.match(doc.querySelector('[data-key="objective"]').innerHTML, /<p>Meta<\/p>/);
+  const participation = doc.querySelector('meta[data-key="participation"]');
+  assert.equal(participation.getAttribute('content'), 'Grupal');
+  assert.equal(participation.getAttribute('data-value'), 'group');
+  assert.equal(participation.getAttribute('name'), 'audience');
+  assert.equal(doc.querySelector('[data-key="duration"]'), null);
+  assert.equal(doc.querySelector('[data-key="extra"]').textContent, 'Se queda');
+  assert.match(saved, /theme\.css/);
+});
+
+test('meta number markers and a metadata title keep index values', () => {
+  const shell = `<!DOCTYPE html><html lang="es"><head>
+    <meta class="metadata" data-key="duration" data-unit="minutes">
+    <title class="metadata" data-key="title">Viejo</title>
+  </head><body><main></main></body></html>`;
+  const main = parseContentHtml(shell, DOMParser);
+  const saved = serializePackage(main, { title: 'Ajustes' }, {
+    shell,
+    metadata: {
+      title: { value: 'Curso RED' },
+      duration: { value: '12', unit: 'hours' },
+      participation: { value: 'group' },
+    },
+  }, DOMParser);
+  const doc = new DOMParser().parseFromString(saved, 'text/html');
+  const title = doc.querySelector('title');
+  assert.equal(title.textContent, 'Curso RED');
+  assert.equal(title.classList.contains('metadata'), true);
+  assert.equal(title.getAttribute('data-key'), 'title');
+  const duration = doc.querySelector('meta[data-key="duration"]');
+  assert.equal(duration.getAttribute('content'), '12 Horas');
+  assert.equal(duration.getAttribute('data-unit'), 'hours');
+  assert.equal(doc.querySelector('[data-key="participation"]'), null);
+  assert.doesNotMatch(saved, /Ajustes/);
+});
+
 test('unknown metadata keys resolve as rich', () => {
   assert.equal(resolveMetadataKind('title'), 'text');
   assert.equal(resolveMetadataKind('activityTitle'), 'rich');

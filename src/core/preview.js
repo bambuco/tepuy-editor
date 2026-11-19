@@ -5,6 +5,8 @@
  * @license http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
+import { DEFAULT_LANGUAGE, parseOverrides, serializeBase, serializeOverrides } from '../tepuy/lang/index.js';
+
 /**
  * @param {string} value CSS value.
  * @returns {boolean} Whether the value can be placed in a stylesheet.
@@ -121,8 +123,28 @@ function bodyFromDocument(html) {
 }
 
 /**
- * Builds a static preview document. It does not include editor scripts.
- * @param {{html?: string, variables?: Object<string, string>, mobile?: boolean, settings?: Object<string, string>, view?: string, autoloadNote?: string, indexHtml?: string, contentHtml?: string, themeCss?: string, resources?: Array<{name?: string, default?: string}>, assignments?: Object<string, string>, assetBase?: string, contentUrls?: Object<string, string>, desktopCss?: string, mobileCss?: string}} options Applied content and theme.
+ * @param {string} source Script source placed in the preview.
+ * @returns {string} Source that cannot close the script element.
+ */
+function embedScript(source) {
+  return String(source || '').replaceAll('<', '\\u003c');
+}
+
+/**
+ * @param {string} lang Package language.
+ * @param {string} customSource custom/lang.js text.
+ * @returns {string} Base catalog script followed by the override script.
+ */
+function languageScripts(lang, customSource) {
+  const base = serializeBase(lang) || serializeBase(DEFAULT_LANGUAGE) || '';
+  const parsed = parseOverrides(customSource || '');
+  const custom = parsed.ok ? serializeOverrides(parsed.overrides) : '';
+  return `<script>${embedScript(base)}</script>\n<script>${embedScript(custom)}</script>`;
+}
+
+/**
+ * Builds a preview document. It includes the package language scripts and no editor scripts.
+ * @param {{html?: string, variables?: Object<string, string>, mobile?: boolean, settings?: Object<string, string>, view?: string, autoloadNote?: string, indexHtml?: string, contentHtml?: string, themeCss?: string, resources?: Array<{name?: string, default?: string}>, assignments?: Object<string, string>, assetBase?: string, contentUrls?: Object<string, string>, desktopCss?: string, mobileCss?: string, customLang?: string}} options Applied content and theme.
  * @returns {string} HTML document for a sandboxed iframe.
  */
 export function buildPreviewHtml({
@@ -141,6 +163,7 @@ export function buildPreviewHtml({
   contentUrls = {},
   desktopCss = '',
   mobileCss = '',
+  customLang = '',
 }) {
   const custom = rootDeclarations(variables);
   const themeSheet = rewriteThemeCss(themeCss, { resources, assignments, assetBase, contentUrls });
@@ -163,10 +186,12 @@ export function buildPreviewHtml({
   else {
     body = bodyFromDocument(html) || html;
   }
+  const lang = settings.lang || DEFAULT_LANGUAGE;
   return `<!DOCTYPE html>
-<html lang="${escapeHtml(settings.lang || 'es')}">
+<html lang="${escapeHtml(lang)}">
 <head>
   <meta charset="utf-8">
+  ${languageScripts(lang, customLang)}
   <style>
     :root { ${custom} }
 ${CONTROL_CSS}

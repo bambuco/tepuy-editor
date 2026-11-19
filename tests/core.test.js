@@ -12,8 +12,8 @@ import { slugify, uniqueId } from '../src/core/ids.js';
 import { parseContentHtml } from '../src/core/parser.js';
 import { serializeContent } from '../src/core/serializer.js';
 import { createDocumentHistory } from '../src/core/history.js';
-import { lessonStatusForProgress, MASTERY_SCORE, packageProgress, readLessonStatus } from '../tepuy/scorm/progress.js';
-import { buildScorm12Manifest } from '../tepuy/scorm/manifest.js';
+import { lessonStatusForProgress, MASTERY_SCORE, packageProgress, readLessonStatus } from '../src/tepuy/scorm/progress.js';
+import { buildScorm12Manifest } from '../src/tepuy/scorm/manifest.js';
 import { SAMPLE_CONTENT } from '../src/sample-content.js';
 
 const html = `<main>

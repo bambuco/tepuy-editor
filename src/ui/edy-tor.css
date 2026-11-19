@@ -1,319 +1,376 @@
 /* Tepuy shell and canvas styles loaded into the Edy shadow root via customCss. */
 
+button {
+    color: var(--edy-color-text, #000);
+    background-color: var(--edy-color-background, #fff);
+    border: 1px solid var(--edy-color-border, #ddd);
+
+    &:active,
+    &:focus,
+    &:hover {
+        &:not(:disabled) {
+            background-color: var(--edy-color-accent, #f0f0f0);
+        }
+    }
+
+    &:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+}
+
 .tepuy-about {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  max-width: 32rem;
-  line-height: 1.45;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    max-width: 32rem;
+    line-height: 1.45;
 }
 
 .tepuy-about p {
-  margin: 0;
+    margin: 0;
 }
 
 .tepuy-controls {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
 }
 
 .tepuy-control-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
 }
 
 .tepuy-control-grid .edy-button {
-  min-height: 2.4rem;
-  white-space: normal;
-  border: 1px solid var(--edy-color-border);
+    min-height: 2.4rem;
+    white-space: normal;
+    border: 1px solid var(--edy-color-border);
 }
 
 .edy-activity .edy-button {
-  display: flex;
-  align-items: center;
-  justify-content: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .edy-activity .edy-icon {
-  font-size: 18px;
+    font-size: 18px;
 }
 
 .tepuy-structure-tree,
 .tepuy-structure-tree li {
-  min-width: 0;
-  max-width: 100%;
+    min-width: 0;
+    max-width: 100%;
 }
 
 .tepuy-structure-tree .edy-list__item {
-  max-width: 100%;
-  min-width: 0;
-  overflow: hidden;
+    max-width: 100%;
+    min-width: 0;
+    overflow: hidden;
 }
 
 .tepuy-structure-label {
-  min-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
 }
 
 .tepuy-property {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 8px;
 }
 
 .tepuy-property label {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
 }
 
 .tepuy-property textarea {
-  min-height: 5rem;
+    min-height: 5rem;
 }
 
 .tepuy-property input,
 .tepuy-property select,
 .tepuy-property textarea {
-  width: 100%;
-  box-sizing: border-box;
-  color: var(--edy-text, #000);
+    width: 100%;
+    box-sizing: border-box;
+    color: var(--edy-text, #000);
 }
 
 .tepuy-preview {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  min-height: 100%;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 100%;
 }
 
 .tepuy-preview iframe {
-  flex: 1;
-  width: 100%;
-  min-height: 240px;
-  border: 0;
-  background: #fff;
+    flex: 1;
+    width: 100%;
+    min-height: 240px;
+    border: 0;
+    background: #fff;
 }
 
 .tepuy-files,
 .tepuy-audit {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 8px;
 }
 
 .tepuy-files h3,
 .tepuy-audit h3 {
-  margin: 8px 0 0;
-  font-size: 0.85rem;
+    margin: 8px 0 0;
+    font-size: 0.85rem;
 }
 
 .tepuy-audit label {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  font-size: 0.85rem;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 0.85rem;
 }
 
 .tepuy-audit-row {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 6px 0;
-  border-bottom: 1px solid var(--edy-border, #ddd);
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--edy-border, #ddd);
 }
 
 .tepuy-audit-row small {
-  opacity: 0.75;
+    opacity: 0.75;
 }
 
 .tepuy-canvas {
-  --tepuy-color-bg: #f2f2f2;
-  --tepuy-color-heading: #24323a;
-  --tepuy-color-important: #e2793d;
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  min-height: 0;
-  background: var(--tepuy-color-bg, #f2f2f2);
-  color: var(--tepuy-color-heading, #24323a);
+    --tepuy-color-bg: #f2f2f2;
+    --tepuy-color-heading: #24323a;
+    --tepuy-color-important: #e2793d;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
 }
 
 .tepuy-canvas__scroll {
-  flex: 1;
-  overflow: auto;
-  padding: 8px;
+    flex: 1;
+    overflow: auto;
+    padding: 8px;
 }
 
-.tepuy-index-actions {
-  z-index: 5;
-  display: flex;
-  gap: 8px;
-  justify-content: flex-end;
-  flex-shrink: 0;
-  padding: 10px 16px;
-  border-top: 1px solid #d5dde3;
-  background: rgba(255, 255, 255, .96);
-  box-shadow: 0 -4px 12px rgba(0, 0, 0, .06);
+.tepuy-index-actions,
+.tepuy-lang-actions {
+    z-index: 5;
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+    flex-shrink: 0;
+    padding: 10px 16px;
+    border-top: 1px solid var(--edy-color-border, #ddd);
+    box-shadow: 0 -4px 4px rgba(0, 0, 0, .3);
 }
 
-.tepuy-index-actions button {
-  font: inherit;
-  min-width: 6rem;
-  padding: 6px 14px;
+.tepuy-index-actions button,
+.tepuy-lang-actions button {
+    min-width: 6rem;
+    padding: 6px 14px;
 }
 
-.tepuy-index-actions button:disabled {
-  opacity: .45;
-  cursor: default;
+.tepuy-index-actions button:disabled,
+.tepuy-lang-actions button:disabled {
+    opacity: .45;
+    cursor: default;
 }
 
-.tepuy-index-actions.is-active {
-  border-top-color: var(--tepuy-color-important, #e2793d);
+.tepuy-index-actions.is-active,
+.tepuy-lang-actions.is-active {
+    border-top-color: var(--tepuy-color-important, #e2793d);
 }
 
 .tepuy-index-form {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  max-width: 42rem;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-width: 42rem;
 }
 
 .tepuy-block {
-  position: relative;
-  margin: 0;
-  padding: 0;
-  border: 1px solid transparent;
-  background: transparent;
+    position: relative;
+    margin: 0;
+    padding: 0;
+    border: 1px solid transparent;
+    background: transparent;
 }
 
 .tepuy-block--frame {
-  margin: 8px 0;
-  padding: 8px 12px 12px;
-  border: 1px solid #d5dde3;
-  background: #fff;
-  box-shadow: 0 1px 4px rgba(36, 50, 58, .12);
+    margin: 8px 0;
+    padding: 8px 12px 12px;
+    border: 1px solid var(--edy-color-border);
+    box-shadow: 0 1px 4px rgba(250, 250, 250, .12);
 }
 
 .tepuy-frame__title {
-  margin: 0 0 8px;
-  font-size: .8rem;
-  font-weight: 700;
+    margin: 0 0 8px;
+    font-size: .8rem;
+    font-weight: 700;
 }
 
 .tepuy-block.is-selected {
-  border-color: var(--tepuy-color-important, #e2793d);
+    border-color: var(--tepuy-color-important, #e2793d);
 }
 
 .tepuy-block__chrome {
-  display: none;
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  z-index: 2;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 2px;
+    display: none;
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 2;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 2px;
 }
 
 .tepuy-block:hover>.tepuy-block__chrome {
-  display: flex;
+    display: flex;
 }
 
 .tepuy-block:hover:has(.tepuy-block:hover)>.tepuy-block__chrome {
-  display: none;
+    display: none;
 }
 
 .tepuy-block.is-editing>.tepuy-block__chrome {
-  display: flex;
+    display: flex;
 }
 
 .tepuy-block__chrome button,
 .tepuy-slot {
-  font: inherit;
+    font: inherit;
 }
 
 .tepuy-block__actions {
-  display: flex;
-  gap: 4px;
-  margin-left: auto;
+    display: flex;
+    gap: 4px;
+    margin-left: auto;
 }
 
 .tepuy-block__drag {
-  cursor: grab;
+    cursor: grab;
 }
 
 .tepuy-block__actions {
-  margin-left: auto;
-  display: flex;
-  gap: 4px;
+    margin-left: auto;
+    display: flex;
+    gap: 4px;
 }
 
 .tepuy-slot {
-  display: block;
-  width: 100%;
-  min-height: 2.2rem;
-  margin-top: 8px;
-  border: 1px dashed #7f97a6;
-  background: transparent;
-  color: inherit;
-  cursor: pointer;
+    display: block;
+    width: 100%;
+    min-height: 2.2rem;
+    margin-top: 8px;
+    border: 1px dashed #7f97a6;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
 }
 
 .tepuy-slot.is-target,
 .tepuy-drop.is-drop {
-  outline: 2px solid var(--tepuy-color-important, #e2793d);
+    outline: 2px solid var(--tepuy-color-important, #e2793d);
 }
 
 .tepuy-slot--page {
-  margin: 24px 0;
-  min-height: 3rem;
-  font-weight: 600;
+    margin: 24px 0;
+    min-height: 3rem;
+    font-weight: 600;
 }
 
 .tepuy-drop {
-  height: 8px;
-  margin: 2px 0;
+    height: 8px;
+    margin: 2px 0;
 }
 
 .tepuy-html {
-  min-height: 1.6rem;
-  padding: 4px;
-  cursor: text;
+    min-height: 1.6rem;
+    padding: 4px;
+    cursor: text;
 }
 
 .tepuy-html__label,
 .tepuy-badge {
-  font-size: .8rem;
-  font-weight: 700;
+    font-size: .8rem;
+    font-weight: 700;
 }
 
 .tepuy-tabs {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
 }
 
 .tepuy-panel-edit {
-  padding: 8px;
-  border: 1px dashed #c5d0d8;
+    padding: 8px;
+    border: 1px dashed #c5d0d8;
 }
 
 .tepuy-canvas .edy-form__actions {
-  display: none;
+    display: none;
 }
 
 .tepuy-canvas img,
 .tepuy-canvas video {
-  max-width: 100%;
+    max-width: 100%;
 }
 
-.tepuy-panel > .edy-list {
-  padding-left: 0;
+.tepuy-panel>.edy-list {
+    padding-left: 0;
+}
+
+.tepuy-lang {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+}
+
+.tepuy-lang__body {
+    flex: 1;
+    overflow: auto;
+    padding: 12px;
+
+    table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    th,
+    td {
+        padding: 6px 8px;
+        border-bottom: 1px solid var(--edy-border, #ddd);
+        text-align: left;
+        vertical-align: top;
+
+        &:last-child {
+            width: 33%;
+        }
+    }
+
+    input,
+    textarea {
+        width: 100%;
+        box-sizing: border-box;
+        color: var(--edy-color-text, #000);
+        background: var(--edy-color-background, #fff);
+        border: 1px solid var(--edy-color-border, #ddd);
+    }
 }
